@@ -1,7 +1,7 @@
 // ponytail: 用正则从 HTML 中提取用量数据，与 opencode-usage-viewer 相同的解析策略
 async function fetchUsage(workspaceId, authCookie) {
   const url = `https://opencode.ai/workspace/${encodeURIComponent(workspaceId)}/go`;
-  const headers = buildHeaders(authCookie);
+  const headers = buildPageHeaders(authCookie);
   const resp = await fetch(url, { headers, redirect: "follow" });
 
   if (!resp.ok) {
@@ -51,55 +51,60 @@ async function fetchUsage(workspaceId, authCookie) {
   return result;
 }
 
-// 抓取 /usage 页面，获取每日用量和 Top 5 模型
+// 抓取每日用量，自动翻页直到跨天
 async function fetchDailyUsage(workspaceId, authCookie) {
-  const url = `https://opencode.ai/workspace/${encodeURIComponent(workspaceId)}/usage`;
-  const headers = buildHeaders(authCookie);
-  const resp = await fetch(url, { headers, redirect: "follow" });
-
-  if (!resp.ok) {
-    return { dailyCost: 0, topModels: [], error: `HTTP ${resp.status}` };
-  }
-
-  const html = await resp.text();
+  const cookieStr = authCookie.includes("auth=") ? authCookie : `auth=${authCookie}`;
+  const usageUrl = `https://opencode.ai/workspace/${encodeURIComponent(workspaceId)}/usage`;
+  
+  // 先获取初始页面，提取 server-id
+  const initResp = await fetch(usageUrl, {
+    headers: { ...buildPageHeaders(authCookie), 'Accept': 'text/html' },
+    redirect: "follow",
+  });
+  if (!initResp.ok) return { dailyCost: 0, topModels: [], error: `HTTP ${initResp.status}` };
+  
+  const html = await initResp.text();
+  
+  // 从 HTML 提取 x-server-id（64 位 hex，出现在 script 或 meta 中）
+  let serverId = 'bfd684bfc2e4eed05cd0b518f5e4eafd3f3376e3938abb9e536e7c03df831e5c';
+  const sidMatch = html.match(/[a-f0-9]{64}/);
+  if (sidMatch) serverId = sidMatch[0];
 
   // 东八区今日日期
   const now = new Date();
   const beijing = new Date(now.getTime() + 8 * 3600000);
   const today = beijing.toISOString().slice(0, 10);
 
-  // ponytail: 页面固定返回最近 50 条，不支持翻页，当日超过 50 条请求时只统计最近的 50 条
-  const segments = html.split('id:"usg_');
   const modelTotals = {};
   let dailyCost = 0;
+  let totalPages = 0;
 
-  for (let i = 1; i < segments.length; i++) {
-    const seg = segments[i];
-    const modelM = new RegExp('model:"([^"]+)"').exec(seg);
-    const costM = /cost:(\d+)/.exec(seg);
-    if (!modelM || !costM) continue;
+  // 逐页抓取
+  for (let page = 0; page < 50; page++) {
+    const records = await fetchUsagePage(workspaceId, cookieStr, serverId, page);
+    if (!records || records.length === 0) break;
+    totalPages++;
 
-    const timeM = new RegExp('timeCreated:\\$R\\[\\d+\\]=new Date\\("([^"]+)"\\)').exec(seg);
-    if (!timeM) continue;
-    // 页面时间戳是 UTC，转为东八区日期再比较
-    const utcDate = new Date(timeM[1]);
-    const beijingDate = new Date(utcDate.getTime() + 8 * 3600000).toISOString().slice(0, 10);
-    if (beijingDate !== today) continue;
+    let crossedDay = false;
+    for (const rec of records) {
+      const utcDate = new Date(rec.time);
+      const bjDate = new Date(utcDate.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+      
+      if (bjDate < today) {
+        // 已经翻到昨天，停止
+        crossedDay = true;
+        break;
+      }
+      if (bjDate !== today) continue;
 
-    const inputM = /inputTokens:(\d+)/.exec(seg);
-    const outputM = /outputTokens:(\d+)/.exec(seg);
-    const reasonM = /reasoningTokens:(\d+)/.exec(seg);
-    const cacheM = /cacheReadTokens:(\d+)/.exec(seg);
+      if (!modelTotals[rec.model]) modelTotals[rec.model] = { cost: 0, tokens: 0, count: 0 };
+      modelTotals[rec.model].cost += rec.cost;
+      modelTotals[rec.model].tokens += rec.tokens;
+      modelTotals[rec.model].count++;
+      dailyCost += rec.cost;
+    }
 
-    const cost = Number(costM[1]) / 100000000;
-    const tokens = (inputM ? Number(inputM[1]) : 0) + (outputM ? Number(outputM[1]) : 0) +
-      (reasonM ? Number(reasonM[1]) : 0) + (cacheM ? Number(cacheM[1]) : 0);
-
-    if (!modelTotals[modelM[1]]) modelTotals[modelM[1]] = { cost: 0, tokens: 0, count: 0 };
-    modelTotals[modelM[1]].cost += cost;
-    modelTotals[modelM[1]].tokens += tokens;
-    modelTotals[modelM[1]].count++;
-    dailyCost += cost;
+    if (crossedDay || records.length < 50) break;
   }
 
   const topModels = Object.entries(modelTotals)
@@ -115,7 +120,51 @@ async function fetchDailyUsage(workspaceId, authCookie) {
   return { dailyCost: Math.round(dailyCost * 10000) / 10000, topModels };
 }
 
-function buildHeaders(authCookie) {
+async function fetchUsagePage(workspaceId, cookieStr, serverId, page) {
+  const body = JSON.stringify({
+    t: {t:9,i:0,l:2,a:[{t:1,s:workspaceId},{t:0,s:page}],o:0},
+    f: 31, m: []
+  });
+
+  const resp = await fetch('https://opencode.ai/_server', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Cookie': cookieStr,
+      'Accept': '*/*',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Origin': 'https://opencode.ai',
+      'Referer': `https://opencode.ai/workspace/${workspaceId}/usage`,
+      'x-server-id': serverId,
+      'x-server-instance': `server-fn:${page + 1}`,
+    },
+    body,
+  });
+
+  if (!resp.ok) return null;
+  const text = await resp.text();
+
+  // 解析记录
+  const records = [];
+  const segRegex = /id:"(usg_[^"]+)",workspaceID:"[^"]+",timeCreated:\$R\[\d+\]=new Date\("([^"]+)"\),[^}]*?model:"([^"]+)",[^}]*?cost:(\d+)/g;
+  let m;
+  while ((m = segRegex.exec(text)) !== null) {
+    const inputM = /inputTokens:(\d+)/.exec(m[0]);
+    const outputM = /outputTokens:(\d+)/.exec(m[0]);
+    const reasonM = /reasoningTokens:(\d+)/.exec(m[0]);
+    const cacheM = /cacheReadTokens:(\d+)/.exec(m[0]);
+    records.push({
+      time: m[2],
+      model: m[3],
+      cost: Number(m[4]) / 100000000,
+      tokens: (inputM ? Number(inputM[1]) : 0) + (outputM ? Number(outputM[1]) : 0) +
+        (reasonM ? Number(reasonM[1]) : 0) + (cacheM ? Number(cacheM[1]) : 0),
+    });
+  }
+  return records;
+}
+
+function buildPageHeaders(authCookie) {
   return {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "text/html",
