@@ -10,3 +10,5 @@ data.db
 .comet/
 .opencode/
 docs/comet/
+CLAUDE.md
+AGENTS.md
