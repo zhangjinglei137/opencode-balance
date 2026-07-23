@@ -1,0 +1,182 @@
+{
+  "schema": "comet.native.implementation-scope.v2",
+  "contractHash": "c29d85de67aa0fe131c21b9509240fb308bae7f2b8abc41619b9fd7bc1d23965",
+  "baselineProjectionRef": "runtime/evidence/snapshots/8946ae9e2c74798128f2f41cee1a2c716fade2cb030c696d18be142322a8effc.json",
+  "baselineProjectionHash": "8946ae9e2c74798128f2f41cee1a2c716fade2cb030c696d18be142322a8effc",
+  "currentProjectionRef": "runtime/evidence/snapshots/633e7368dd2069a4819f3996048b8bb51e0cbbad1f5ac04dda6d7067576c77d0.json",
+  "currentProjectionHash": "633e7368dd2069a4819f3996048b8bb51e0cbbad1f5ac04dda6d7067576c77d0",
+  "complete": false,
+  "declaredArtifacts": [
+    {
+      "path": ".opencode/state/codegraph-session-runtime.json",
+      "kind": "file"
+    },
+    {
+      "path": "data.db",
+      "kind": "file"
+    },
+    {
+      "path": "db.js",
+      "kind": "file"
+    },
+    {
+      "path": "package.json",
+      "kind": "file"
+    },
+    {
+      "path": "public/style.css",
+      "kind": "file"
+    },
+    {
+      "path": "scraper.js",
+      "kind": "file"
+    },
+    {
+      "path": "server.js",
+      "kind": "file"
+    }
+  ],
+  "changes": [
+    {
+      "path": ".opencode/state/codegraph-session-runtime.json",
+      "kind": "modified",
+      "before": {
+        "hash": "7f836fb3e0b9460ee7c44b7008f4ddaa0d33c0adee78ff45200d71c25d18ecef",
+        "size": 480
+      },
+      "after": {
+        "hash": "e6437c3e1ade373d4f2fc73dc945ad2f8d0aa347cbfc5e089a53c0653f72952c",
+        "size": 475
+      },
+      "attributedTo": [
+        {
+          "path": ".opencode/state/codegraph-session-runtime.json",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "path": "data.db",
+      "kind": "added",
+      "before": null,
+      "after": {
+        "hash": "3c759ad515278ccf9c07448735c89b0eb9ad5b3f16b5dbaa1aa08eadee116e24",
+        "size": 16384
+      },
+      "attributedTo": [
+        {
+          "path": "data.db",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "path": "db.js",
+      "kind": "added",
+      "before": null,
+      "after": {
+        "hash": "6380055ca4e55a5d0bf6bdbe622165688c11f21ef6f84b6b7d620d525fe99c49",
+        "size": 4788
+      },
+      "attributedTo": [
+        {
+          "path": "db.js",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "path": "package-lock.json",
+      "kind": "added",
+      "before": null,
+      "after": {
+        "hash": "bf6b1a7e8caf613bb96ef1b662684ded3d7dcb25eb691611d0fbe10bbae6a1cd",
+        "size": 29698
+      },
+      "attributedTo": []
+    },
+    {
+      "path": "package.json",
+      "kind": "added",
+      "before": null,
+      "after": {
+        "hash": "3d9ac6e12ecece74e0879fe7670cb8a6716cb801fdff00db4a6c65faf542f825",
+        "size": 281
+      },
+      "attributedTo": [
+        {
+          "path": "package.json",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "path": "public/style.css",
+      "kind": "added",
+      "before": null,
+      "after": {
+        "hash": "110f3a54458c9530894cb38ad2f7fc847fbb808e08089ded41d532e7ae66c081",
+        "size": 1353
+      },
+      "attributedTo": [
+        {
+          "path": "public/style.css",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "path": "scraper.js",
+      "kind": "added",
+      "before": null,
+      "after": {
+        "hash": "3df479f99d91616d45a7b755d1f7f02e878bc1cad5b0caff07b40470aee8c7a8",
+        "size": 2311
+      },
+      "attributedTo": [
+        {
+          "path": "scraper.js",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "path": "server.js",
+      "kind": "added",
+      "before": null,
+      "after": {
+        "hash": "dea24312a848aab663f43716a03f60501bd0b5f04c61e89e6b13b6fbcd1dfb1e",
+        "size": 8075
+      },
+      "attributedTo": [
+        {
+          "path": "server.js",
+          "kind": "file"
+        }
+      ]
+    }
+  ],
+  "unattributed": [
+    {
+      "path": "package-lock.json",
+      "kind": "added",
+      "before": null,
+      "after": {
+        "hash": "bf6b1a7e8caf613bb96ef1b662684ded3d7dcb25eb691611d0fbe10bbae6a1cd",
+        "size": 29698
+      },
+      "attributedTo": []
+    }
+  ],
+  "unresolvedScopes": [
+    {
+      "id": "scope:15baa4fb2f77f0ca67a2e15ee08f285ad28421b1c70bdfdb8e9864da368bfeda",
+      "kind": "unattributed-change",
+      "source": "implementation-scope",
+      "path": "package-lock.json",
+      "reason": "Changed path is not covered by a declared artifact: package-lock.json"
+    }
+  ],
+  "noCodeReason": null,
+  "scopeHash": "ae0d2d50837a289f7590116b29b5763e099c87283cac3b509ac96cca28095e10"
+}

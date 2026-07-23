@@ -1,0 +1,19 @@
+{
+  "schema": "comet.native.transaction.v2",
+  "id": "4d3447d8-94d5-4a2f-88a0-6e8901c6547d",
+  "kind": "archive",
+  "status": "committed",
+  "change": "opencode-go-balance-checker",
+  "createdAt": "2026-07-23T15:00:38.706Z",
+  "preflightHash": "3138dce838ed741966db7a2e57ef30451254e5450eac21a49e598486ea9d4eb7",
+  "operations": [
+    {
+      "id": "archive-change",
+      "type": "move",
+      "source": "changes/opencode-go-balance-checker",
+      "target": "archive/2026-07-23-opencode-go-balance-checker",
+      "expectedSourceHash": "2b9e518d5ca657a5c4adeb72ff676f43b530e7b82849ec7799abc1bf7686cc25",
+      "expectedTargetHash": null
+    }
+  ]
+}

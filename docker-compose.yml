@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3456:3456"
+    environment:
+      - PORT=3456
+      - APP_PASSWORD=admin123
+      - JWT_SECRET=change-me-in-production
+      - POLL_INTERVAL_MINUTES=5
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
