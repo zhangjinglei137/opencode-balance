@@ -7,3 +7,6 @@ data.db
 *.log
 .DS_Store
 .idea/
+.comet/
+.opencode/
+docs/comet/
