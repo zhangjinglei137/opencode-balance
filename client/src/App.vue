@@ -1,18 +1,23 @@
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Moon } from '@element-plus/icons-vue'
+import { Moon, Expand, Fold } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 
 const isLoginPage = computed(() => route.name === 'login')
+const menuOpen = ref(false)
 
 function logout() {
   localStorage.removeItem('token')
   ElMessage.success('已退出登录')
   router.push('/login')
+}
+
+function closeMenu() {
+  menuOpen.value = false
 }
 </script>
 
@@ -22,8 +27,11 @@ function logout() {
       <router-view />
     </div>
 
-    <div v-else class="app-layout">
-      <aside class="sidebar">
+    <div v-else class="app-layout" :class="{ 'menu-open': menuOpen }">
+      <!-- 移动端遮罩 -->
+      <div v-if="menuOpen" class="menu-overlay" @click="closeMenu" />
+
+      <aside class="sidebar" :class="{ open: menuOpen }">
         <div class="brand">
           <el-icon :size="22"><Moon /></el-icon>
           <span>余额监控</span>
@@ -35,6 +43,7 @@ function logout() {
           background-color="#16213e"
           text-color="#a0aec0"
           active-text-color="#ffffff"
+          @select="closeMenu"
         >
           <el-menu-item-group title="导航">
             <el-menu-item index="/">
@@ -51,7 +60,12 @@ function logout() {
 
       <main class="main-area">
         <header class="topbar">
-          <h1 class="page-title">OpenCode Go 余额监控</h1>
+          <div class="topbar-left">
+            <el-button class="menu-toggle" text @click="menuOpen = !menuOpen">
+              <el-icon :size="20"><Fold v-if="menuOpen" /><Expand v-else /></el-icon>
+            </el-button>
+            <h1 class="page-title">OpenCode Go 余额监控</h1>
+          </div>
           <el-button text type="danger" @click="logout">退出登录</el-button>
         </header>
         <div class="content">
@@ -77,11 +91,14 @@ function logout() {
   background: #1a1a2e;
 }
 
+/* 侧边栏 */
 .sidebar {
   width: 220px;
   flex-shrink: 0;
   background: #16213e;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 100;
+  transition: transform 0.25s ease;
 }
 
 .brand {
@@ -101,6 +118,7 @@ function logout() {
   background: transparent;
 }
 
+/* 主区域 */
 .main-area {
   flex: 1;
   display: flex;
@@ -113,10 +131,23 @@ function logout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
+  padding: 0 24px;
   background: rgba(22, 33, 62, 0.6);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-toggle {
+  display: none;
+  color: #a0aec0;
+  padding: 4px;
 }
 
 .page-title {
@@ -128,7 +159,52 @@ function logout() {
 
 .content {
   flex: 1;
-  padding: 24px 32px;
+  padding: 24px;
   overflow-y: auto;
+}
+
+/* 移动端遮罩 */
+.menu-overlay {
+  display: none;
+}
+
+/* 手机端 < 768px */
+@media (max-width: 767px) {
+  .menu-toggle {
+    display: inline-flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .menu-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+  }
+
+  .topbar {
+    padding: 0 16px;
+  }
+
+  .content {
+    padding: 16px;
+  }
+
+  .page-title {
+    font-size: 16px;
+  }
 }
 </style>

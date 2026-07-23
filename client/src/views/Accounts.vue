@@ -168,9 +168,9 @@ onMounted(() => {
           <span class="drag-handle" :data-index="$index">⋮⋮</span>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="名称" min-width="140" />
-      <el-table-column prop="workspace_id" label="Workspace ID" min-width="180" show-overflow-tooltip />
-      <el-table-column label="Cookie" min-width="240">
+      <el-table-column prop="name" label="名称" min-width="80" />
+      <el-table-column prop="workspace_id" label="Workspace ID" min-width="140" show-overflow-tooltip />
+      <el-table-column label="Cookie" min-width="160">
         <template #default="{ row }">
           <el-input :model-value="displayCookie(row)" readonly class="cookie-input">
             <template #suffix>
@@ -182,7 +182,7 @@ onMounted(() => {
           </el-input>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" min-width="140">
         <template #default="{ row }">
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
           <el-popconfirm title="确定删除该账号吗？" confirm-button-text="确定" cancel-button-text="取消"
@@ -196,8 +196,9 @@ onMounted(() => {
     </el-table>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑账号' : '添加账号'" width="500px"
-      :close-on-click-modal="false">
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑账号' : '添加账号'" width="75%"
+      :close-on-click-modal="false"
+      class="account-dialog">
       <el-form label-position="top">
         <el-form-item label="名称">
           <el-input v-model="form.name" placeholder="请输入名称" />
@@ -329,5 +330,31 @@ onMounted(() => {
 
 .accounts-table :deep(.draggable-row:active) {
   cursor: grabbing;
+}
+
+/* 手机端 */
+@media (max-width: 640px) {
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .drag-hint {
+    display: none;
+  }
+
+  .account-dialog {
+    --el-dialog-width: 75vw;
+    max-width: 500px;
+  }
+
+  .account-dialog :deep(.el-dialog__body) {
+    overflow-x: hidden;
+    word-break: break-all;
+  }
+
+  .accounts-table :deep(.el-table__body td),
+  .accounts-table :deep(.el-table__header th) {
+    padding: 8px 4px !important;
+  }
 }
 </style>
