@@ -17,6 +17,13 @@
 - **暗色主题** — Element Plus 暗色主题
 - **Docker 部署** — 一键部署
 
+## 截图
+
+![仪表盘](screenshots/dashboard.png)
+![账号管理](screenshots/accounts.png)
+![渠道控制](screenshots/channel-control.png)
+![算法配置](screenshots/algorithm-config.png)
+
 ## 快速开始
 
 ### 环境要求
