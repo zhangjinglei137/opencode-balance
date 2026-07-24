@@ -4,6 +4,7 @@ client/dist/
 data/
 data.db
 .env
+docker-compose.yml
 *.log
 .DS_Store
 .idea/
