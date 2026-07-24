@@ -17,7 +17,8 @@
 
 ## 截图
 
-> 启动后访问 `http://localhost:3456`，登录后即可看到仪表盘。
+![仪表盘](screenshots/dashboard.png)
+![账号管理](screenshots/accounts.png)
 
 ## 快速开始
 
