@@ -2,8 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { initDb } = require('./db');
+const { initDb, getAlgorithmConfig } = require('./db');
 const { pollAll } = require('./routes/usage');
+const { runBalanceSync, runPrioritySync } = require('./routes/channels');
 const log = require('./logger');
 
 const app = express();
@@ -26,6 +27,8 @@ if (fs.existsSync(distDir)) {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/accounts', require('./routes/accounts'));
 app.use('/api/usage', require('./routes/usage').router);
+app.use('/api/channels', require('./routes/channels').router);
+app.use('/api/algorithm', require('./routes/algorithm'));
 
 // SPA 回退：前端路由由 Vue Router 处理
 if (fs.existsSync(distDir)) {
@@ -42,4 +45,21 @@ if (fs.existsSync(distDir)) {
   pollAll();
   setInterval(pollAll, POLL_INTERVAL);
   app.listen(PORT, () => log.info(`Server running on http://localhost:${PORT}`));
+
+  // New API 同步定时器
+  const cfg = getAlgorithmConfig() || {};
+  const balanceInterval = ((cfg.sync_balance_interval_minutes) || 10) * 60 * 1000;
+  const priorityInterval = ((cfg.sync_priority_interval_minutes) || 30) * 60 * 1000;
+
+  setTimeout(() => {
+    runBalanceSync().catch(err => log.error(`余额自动同步失败: ${err.message}`));
+    setInterval(() => runBalanceSync().catch(err => log.error(`余额自动同步失败: ${err.message}`)), balanceInterval);
+  }, 30000);
+
+  setTimeout(() => {
+    runPrioritySync().catch(err => log.error(`优先级自动同步失败: ${err.message}`));
+    setInterval(() => runPrioritySync().catch(err => log.error(`优先级自动同步失败: ${err.message}`)), priorityInterval);
+  }, 30000);
+
+  log.info(`同步定时器: 余额 ${balanceInterval/60000}min, 优先级 ${priorityInterval/60000}min`);
 })();

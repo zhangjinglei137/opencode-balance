@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Moon, Expand, Fold } from '@element-plus/icons-vue'
+import { Moon, Expand, Fold, Link, Setting } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,6 +53,14 @@ function closeMenu() {
             <el-menu-item index="/accounts">
               <el-icon><UserFilled /></el-icon>
               <span>账号管理</span>
+            </el-menu-item>
+            <el-menu-item index="/channels">
+              <el-icon><Link /></el-icon>
+              <span>渠道控制</span>
+            </el-menu-item>
+            <el-menu-item index="/algorithm">
+              <el-icon><Setting /></el-icon>
+              <span>算法配置</span>
             </el-menu-item>
           </el-menu-item-group>
         </el-menu>

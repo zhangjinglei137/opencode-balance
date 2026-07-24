@@ -17,6 +17,16 @@ const routes = [
     name: 'accounts',
     component: () => import('../views/Accounts.vue'),
   },
+  {
+    path: '/channels',
+    name: 'channels',
+    component: () => import('../views/ChannelControl.vue'),
+  },
+  {
+    path: '/algorithm',
+    name: 'algorithm',
+    component: () => import('../views/AlgorithmConfig.vue'),
+  },
 ]
 
 const router = createRouter({

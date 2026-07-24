@@ -63,4 +63,15 @@ export function fetchUsage() {
   return api.post('/api/usage/fetch')
 }
 
+// 渠道控制
+export function getChannelStatus() { return api.get('/api/channels'); }
+export function syncBalance(channelId) { return api.post('/api/channels/sync-balance', { channel_id: channelId }); }
+export function syncPriority(channelId) { return api.post('/api/channels/sync-priority', { channel_id: channelId }); }
+export function getSyncLogs(limit = 50) { return api.get('/api/channels/logs', { params: { limit } }); }
+
+// 算法配置
+export function getAlgorithmConfig() { return api.get('/api/algorithm/config'); }
+export function updateAlgorithmConfig(data) { return api.put('/api/algorithm/config', data); }
+export function simulateAlgorithm(data) { return api.post('/api/algorithm/simulate', data); }
+
 export default api

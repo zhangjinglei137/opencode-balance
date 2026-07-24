@@ -34,8 +34,8 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!getAccount(id)) return res.status(404).json({ error: '账号不存在' });
-  const { name, workspaceId, authCookie } = req.body;
-  updateAccount(id, name, workspaceId, authCookie || undefined);
+  const { name, workspaceId, authCookie, newApiChannelId, syncBalanceEnabled, syncPriorityEnabled } = req.body;
+  updateAccount(id, name, workspaceId, authCookie || undefined, newApiChannelId, syncBalanceEnabled, syncPriorityEnabled);
   res.json({ ok: true });
 });
 

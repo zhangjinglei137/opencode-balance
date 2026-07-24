@@ -16,6 +16,9 @@ const form = reactive({
   name: '',
   workspaceId: '',
   authCookie: '',
+  newApiChannelId: '',
+  syncBalanceEnabled: false,
+  syncPriorityEnabled: false,
 })
 
 function resetForm() {
@@ -23,6 +26,9 @@ function resetForm() {
   form.name = ''
   form.workspaceId = ''
   form.authCookie = ''
+  form.newApiChannelId = ''
+  form.syncBalanceEnabled = false
+  form.syncPriorityEnabled = false
 }
 
 function openAdd() {
@@ -37,6 +43,9 @@ function openEdit(row) {
   form.name = row.name
   form.workspaceId = row.workspace_id
   form.authCookie = ''
+  form.newApiChannelId = row.new_api_channel_id || ''
+  form.syncBalanceEnabled = row.sync_balance_enabled ?? false
+  form.syncPriorityEnabled = row.sync_priority_enabled ?? false
   dialogVisible.value = true
 }
 
@@ -63,6 +72,9 @@ async function handleSubmit() {
     const payload = {
       name: form.name,
       workspaceId: form.workspaceId,
+      newApiChannelId: form.newApiChannelId,
+      syncBalanceEnabled: form.syncBalanceEnabled,
+      syncPriorityEnabled: form.syncPriorityEnabled,
     }
     if (form.authCookie) {
       payload.authCookie = form.authCookie
@@ -209,6 +221,15 @@ onMounted(() => {
         <el-form-item label="Auth Cookie">
           <el-input v-model="form.authCookie" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }"
             :placeholder="isEdit ? '留空则不修改' : '请输入 Auth Cookie'" />
+        </el-form-item>
+        <el-form-item label="New API 渠道 ID">
+          <el-input v-model="form.newApiChannelId" placeholder="输入 New API 渠道 ID（可选）" />
+        </el-form-item>
+        <el-form-item label="余额同步">
+          <el-switch v-model="form.syncBalanceEnabled" />
+        </el-form-item>
+        <el-form-item label="优先级同步">
+          <el-switch v-model="form.syncPriorityEnabled" />
         </el-form-item>
       </el-form>
       <template #footer>

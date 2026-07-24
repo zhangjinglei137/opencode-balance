@@ -51,6 +51,16 @@ async function initDb(filePath) {
   if (!accCols.includes('sort_order')) {
     try { db.run("ALTER TABLE accounts ADD COLUMN sort_order INTEGER DEFAULT 0"); } catch (_) {}
   }
+  // New API 渠道字段
+  if (!accCols.includes('new_api_channel_id')) {
+    try { db.run("ALTER TABLE accounts ADD COLUMN new_api_channel_id INTEGER"); } catch (_) {}
+  }
+  if (!accCols.includes('sync_balance_enabled')) {
+    try { db.run("ALTER TABLE accounts ADD COLUMN sync_balance_enabled INTEGER DEFAULT 0"); } catch (_) {}
+  }
+  if (!accCols.includes('sync_priority_enabled')) {
+    try { db.run("ALTER TABLE accounts ADD COLUMN sync_priority_enabled INTEGER DEFAULT 0"); } catch (_) {}
+  }
 
   db.run(`
     CREATE TABLE IF NOT EXISTS usage_snapshots (
@@ -83,6 +93,45 @@ async function initDb(filePath) {
     }
   }
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sync_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      sync_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      message TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS algorithm_config (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rolling_period_hours REAL DEFAULT 5,
+      weekly_period_days REAL DEFAULT 7,
+      monthly_period_days REAL DEFAULT 30,
+      weight_rolling REAL DEFAULT 0.1,
+      weight_weekly REAL DEFAULT 0.2,
+      weight_monthly REAL DEFAULT 0.7,
+      bonus_cap_rolling REAL DEFAULT 0.1,
+      bonus_cap_weekly REAL DEFAULT 0.2,
+      bonus_cap_monthly REAL DEFAULT 0.7,
+      tier_threshold REAL DEFAULT 0.3,
+      fuse_rolling_warn REAL DEFAULT 0.9,
+      fuse_rolling_disable REAL DEFAULT 0.98,
+      fuse_weekly_warn REAL DEFAULT 0.95,
+      fuse_monthly_warn REAL DEFAULT 0.98,
+      fuse_monthly_disable REAL DEFAULT 1.0,
+      sync_balance_interval_minutes INTEGER DEFAULT 10,
+      sync_priority_interval_minutes INTEGER DEFAULT 30
+    )
+  `);
+
+  // 确保有默认配置
+  if (!queryOne("SELECT id FROM algorithm_config LIMIT 1")) {
+    db.run("INSERT INTO algorithm_config DEFAULT VALUES");
+  }
+
   save();
   return db;
 }
@@ -105,7 +154,7 @@ function queryOne(sql, params = []) {
 
 function getAccounts() {
   return queryAll(
-    "SELECT id, name, workspace_id, substr(auth_cookie,1,10) || '...' as auth_cookie_preview, sort_order, created_at, updated_at FROM accounts ORDER BY sort_order ASC, id ASC"
+    "SELECT id, name, workspace_id, substr(auth_cookie,1,10) || '...' as auth_cookie_preview, sort_order, new_api_channel_id, sync_balance_enabled, sync_priority_enabled, created_at, updated_at FROM accounts ORDER BY sort_order ASC, id ASC"
   );
 }
 
@@ -120,12 +169,15 @@ function createAccount(name, workspaceId, authCookie) {
   return row;
 }
 
-function updateAccount(id, name, workspaceId, authCookie) {
+function updateAccount(id, name, workspaceId, authCookie, newApiChannelId, syncBalanceEnabled, syncPriorityEnabled) {
   const fields = [];
   const params = [];
   if (name !== undefined) { fields.push('name = ?'); params.push(name); }
   if (workspaceId !== undefined) { fields.push('workspace_id = ?'); params.push(workspaceId); }
   if (authCookie !== undefined) { fields.push('auth_cookie = ?'); params.push(authCookie); }
+  if (newApiChannelId !== undefined) { fields.push('new_api_channel_id = ?'); params.push(newApiChannelId); }
+  if (syncBalanceEnabled !== undefined) { fields.push('sync_balance_enabled = ?'); params.push(syncBalanceEnabled ? 1 : 0); }
+  if (syncPriorityEnabled !== undefined) { fields.push('sync_priority_enabled = ?'); params.push(syncPriorityEnabled ? 1 : 0); }
   if (fields.length === 0) return null;
   fields.push("updated_at = datetime('now')");
   params.push(id);
@@ -205,4 +257,60 @@ function reorderAccounts(ids) {
   save();
 }
 
-module.exports = { initDb, getAccounts, getAccount, createAccount, updateAccount, deleteAccount, reorderAccounts, saveUsageSnapshot, getLatestUsage };
+function updateAccountChannel(id, newApiChannelId, syncBalanceEnabled, syncPriorityEnabled) {
+  const fields = [];
+  const params = [];
+  if (newApiChannelId !== undefined) { fields.push('new_api_channel_id = ?'); params.push(newApiChannelId); }
+  if (syncBalanceEnabled !== undefined) { fields.push('sync_balance_enabled = ?'); params.push(syncBalanceEnabled ? 1 : 0); }
+  if (syncPriorityEnabled !== undefined) { fields.push('sync_priority_enabled = ?'); params.push(syncPriorityEnabled ? 1 : 0); }
+  if (fields.length === 0) return null;
+  fields.push("updated_at = datetime('now')");
+  params.push(id);
+  db.run(`UPDATE accounts SET ${fields.join(', ')} WHERE id = ?`, params);
+  save();
+  return { ok: true };
+}
+
+function getAccountsWithChannel() {
+  return queryAll("SELECT id, name, new_api_channel_id, sync_balance_enabled, sync_priority_enabled FROM accounts ORDER BY sort_order ASC, id ASC");
+}
+
+function addSyncLog(accountId, syncType, status, message) {
+  db.run('INSERT INTO sync_logs (account_id, sync_type, status, message) VALUES (?, ?, ?, ?)', [accountId, syncType, status, message]);
+  db.run('DELETE FROM sync_logs WHERE id NOT IN (SELECT id FROM sync_logs ORDER BY id DESC LIMIT 500)');
+  save();
+}
+
+function getSyncLogs(limit = 50) {
+  return queryAll("SELECT * FROM sync_logs ORDER BY id DESC LIMIT ?", [limit]);
+}
+
+function getAlgorithmConfig() {
+  return queryOne("SELECT * FROM algorithm_config ORDER BY id LIMIT 1");
+}
+
+function updateAlgorithmConfig(params) {
+  const allowed = [
+    'rolling_period_hours', 'weekly_period_days', 'monthly_period_days',
+    'weight_rolling', 'weight_weekly', 'weight_monthly',
+    'bonus_cap_rolling', 'bonus_cap_weekly', 'bonus_cap_monthly',
+    'tier_threshold',
+    'fuse_rolling_warn', 'fuse_rolling_disable', 'fuse_weekly_warn',
+    'fuse_monthly_warn', 'fuse_monthly_disable',
+    'sync_balance_interval_minutes', 'sync_priority_interval_minutes',
+  ];
+  const fields = [];
+  const vals = [];
+  for (const key of allowed) {
+    if (params[key] !== undefined) {
+      fields.push(`${key} = ?`);
+      vals.push(params[key]);
+    }
+  }
+  if (fields.length === 0) return null;
+  db.run(`UPDATE algorithm_config SET ${fields.join(', ')} WHERE id = (SELECT id FROM algorithm_config ORDER BY id LIMIT 1)`, vals);
+  save();
+  return { ok: true };
+}
+
+module.exports = { initDb, getAccounts, getAccount, createAccount, updateAccount, deleteAccount, reorderAccounts, saveUsageSnapshot, getLatestUsage, updateAccountChannel, getAccountsWithChannel, addSyncLog, getSyncLogs, getAlgorithmConfig, updateAlgorithmConfig };
