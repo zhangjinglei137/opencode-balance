@@ -19,10 +19,10 @@ function calculatePriorities(accounts, config) {
   const scored = accounts.map(acc => {
     const R_r = 1 - (acc.rolling_pct ?? 0) / 100;
     const R_w = 1 - (acc.weekly_pct ?? 0) / 100;
-    const R_m = 1 - (acc.monthly_pct ?? 0) / 100;
+    const R_m = 1 - (acc.monthly_pct ?? 100) / 100;
     const U_r = (acc.rolling_pct ?? 0) / 100;
     const U_w = (acc.weekly_pct ?? 0) / 100;
-    const U_m = (acc.monthly_pct ?? 0) / 100;
+    const U_m = (acc.monthly_pct ?? 100) / 100;
 
     const T_r = acc.rolling_reset_at
       ? Math.max(0, Math.min((new Date(acc.rolling_reset_at) - now) / 3600000, cfg.rolling_period_hours))

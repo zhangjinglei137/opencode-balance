@@ -38,7 +38,7 @@ router.post('/simulate', (req, res) => {
       account_id: a.id, name: a.name,
       rolling_pct: usageMap[a.id]?.rolling_pct ?? 0,
       weekly_pct: usageMap[a.id]?.weekly_pct ?? 0,
-      monthly_pct: usageMap[a.id]?.monthly_pct ?? 0,
+      monthly_pct: usageMap[a.id]?.monthly_pct ?? 100,
       rolling_reset_at: usageMap[a.id]?.rolling_reset_at,
       weekly_reset_at: usageMap[a.id]?.weekly_reset_at,
       monthly_reset_at: usageMap[a.id]?.monthly_reset_at,

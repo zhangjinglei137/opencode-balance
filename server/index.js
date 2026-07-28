@@ -44,7 +44,7 @@ if (fs.existsSync(distDir)) {
   log.info('数据库初始化完成');
   pollAll();
   setInterval(pollAll, POLL_INTERVAL);
-  app.listen(PORT, () => log.info(`Server running on http://localhost:${PORT}`));
+  app.listen(PORT, () => log.info(`Server v${require('../package.json').version} running on http://localhost:${PORT}`));
 
   // New API 同步定时器
   const cfg = getAlgorithmConfig() || {};

@@ -24,20 +24,20 @@ router.get('/', (req, res) => {
       new_api_channel_id: a.new_api_channel_id,
       sync_balance_enabled: !!a.sync_balance_enabled,
       sync_priority_enabled: !!a.sync_priority_enabled,
-      rolling_pct: u ? (u.rolling_pct ?? 0) : 0,
-      weekly_pct: u ? (u.weekly_pct ?? 0) : 0,
-      monthly_pct: u ? (u.monthly_pct ?? 0) : 0,
+      rolling_pct: u ? (u.rolling_pct ?? 100) : 0,
+      weekly_pct: u ? (u.weekly_pct ?? 100) : 0,
+      monthly_pct: u ? (u.monthly_pct ?? 100) : 0,
       rolling_reset_at: u?.rolling_reset_at || null,
       weekly_reset_at: u?.weekly_reset_at || null,
       monthly_reset_at: u?.monthly_reset_at || null,
       balance_remaining: u
-        ? Math.round((60 * (1 - (u.monthly_pct ?? 0) / 100) + (u.reward_unused ?? 0) * ((u.reward_amount_cents ?? 500) / 100)) * 100) / 100
+        ? Math.round((60 * (1 - (u.monthly_pct ?? 100) / 100) + (u.reward_unused ?? 0) * ((u.reward_amount_cents ?? 500) / 100)) * 100) / 100
         : null,
     };
     if (a.new_api_channel_id && a.sync_priority_enabled && u) {
       algoInputs.push({
         account_id: a.id, name: a.name,
-        rolling_pct: u.rolling_pct ?? 0, weekly_pct: u.weekly_pct ?? 0, monthly_pct: u.monthly_pct ?? 0,
+        rolling_pct: u.rolling_pct ?? 100, weekly_pct: u.weekly_pct ?? 100, monthly_pct: u.monthly_pct ?? 100,
         rolling_reset_at: u.rolling_reset_at, weekly_reset_at: u.weekly_reset_at, monthly_reset_at: u.monthly_reset_at,
       });
     }
@@ -59,7 +59,7 @@ router.post('/sync-balance', async (req, res) => {
     try {
       const u = usageMap[a.id];
       const balance = u
-        ? Math.round((60 * (1 - (u.monthly_pct ?? 0) / 100) + (u.reward_unused ?? 0) * ((u.reward_amount_cents ?? 500) / 100)) * 100) / 100
+        ? Math.round((60 * (1 - (u.monthly_pct ?? 100) / 100) + (u.reward_unused ?? 0) * ((u.reward_amount_cents ?? 500) / 100)) * 100) / 100
         : 0;
       await updateChannelBalance(a.new_api_channel_id, balance);
       addSyncLog(a.id, 'balance', 'success', `余额 ${balance} 同步成功`);
@@ -85,7 +85,7 @@ router.post('/sync-priority', async (req, res) => {
     const u = usageMap[a.id];
     return {
       account_id: a.id, name: a.name,
-      rolling_pct: u?.rolling_pct ?? 0, weekly_pct: u?.weekly_pct ?? 0, monthly_pct: u?.monthly_pct ?? 0,
+      rolling_pct: u?.rolling_pct ?? 100, weekly_pct: u?.weekly_pct ?? 100, monthly_pct: u?.monthly_pct ?? 100,
       rolling_reset_at: u?.rolling_reset_at, weekly_reset_at: u?.weekly_reset_at, monthly_reset_at: u?.monthly_reset_at,
     };
   });
@@ -122,7 +122,7 @@ async function runBalanceSync() {
   for (const a of accs) {
     try {
       const u = usageMap[a.id];
-      const balance = u ? Math.round((60 * (1 - (u.monthly_pct ?? 0) / 100) + (u.reward_unused ?? 0) * ((u.reward_amount_cents ?? 500) / 100)) * 100) / 100 : 0;
+      const balance = u ? Math.round((60 * (1 - (u.monthly_pct ?? 100) / 100) + (u.reward_unused ?? 0) * ((u.reward_amount_cents ?? 500) / 100)) * 100) / 100 : 0;
       await updateChannelBalance(a.new_api_channel_id, balance);
       addSyncLog(a.id, 'balance', 'success', `余额 ${balance} 自动同步`);
     } catch (err) {
@@ -142,7 +142,7 @@ async function runPrioritySync() {
     const u = usageMap[a.id];
     return {
       account_id: a.id, name: a.name,
-      rolling_pct: u?.rolling_pct ?? 0, weekly_pct: u?.weekly_pct ?? 0, monthly_pct: u?.monthly_pct ?? 0,
+      rolling_pct: u?.rolling_pct ?? 100, weekly_pct: u?.weekly_pct ?? 100, monthly_pct: u?.monthly_pct ?? 100,
       rolling_reset_at: u?.rolling_reset_at, weekly_reset_at: u?.weekly_reset_at, monthly_reset_at: u?.monthly_reset_at,
     };
   });

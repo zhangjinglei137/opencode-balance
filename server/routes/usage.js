@@ -39,7 +39,9 @@ async function pollAll() {
 
 router.get('/', (req, res) => {
   const accounts = getLatestUsage().map(a => {
-    const monthlyPct = a.monthly_pct ?? 0;
+    const monthlyPct = a.monthly_pct ?? 100;
+    const weeklyPct = a.weekly_pct ?? 100;
+    const rollingPct = a.rolling_pct ?? 100;
     const rewardAmount = (a.reward_amount_cents ?? 500) / 100;
     const totalRewards = a.reward_total ?? 0;
     const unusedRewards = a.reward_unused ?? 0;
@@ -50,6 +52,9 @@ router.get('/', (req, res) => {
     return {
       ...a,
       fetched_at: fetchedAt,
+      rolling_pct: rollingPct,
+      weekly_pct: weeklyPct,
+      monthly_pct: monthlyPct,
       balance_total: 60 + totalRewards * rewardAmount,
       balance_remaining: 60 * (1 - monthlyPct / 100) + unusedRewards * rewardAmount,
       topModels,

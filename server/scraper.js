@@ -15,7 +15,7 @@ async function fetchUsage(workspaceId, authCookie) {
   }
 
   function extract(section) {
-    const regex = new RegExp(`${section}:\\$R\\[\\d+\\]=\\{status:"ok",resetInSec:(\\d+),usagePercent:(\\d+)\\}`, "i");
+    const regex = new RegExp(`${section}:\\$R\\[\\d+\\]=\\{status:"[^"]*",resetInSec:(\\d+),usagePercent:(\\d+)\\}`, "i");
     const match = html.match(regex);
     if (!match) return null;
     const resetInSec = Number(match[1]);

@@ -138,36 +138,36 @@ onUnmounted(() => {
             <div class="usage-item">
               <div class="usage-label">滚动用量</div>
               <el-progress
-                :percentage="account.rolling_pct"
-                :color="progressColor(account.rolling_pct)"
+                :percentage="account.rolling_pct ?? 0"
+                :color="progressColor(account.rolling_pct ?? 0)"
                 :stroke-width="16"
               />
               <div class="usage-meta">
-                {{ account.rolling_pct }}% · 重置于 {{ countdown(account.rolling_reset_at) }}
+                {{ account.rolling_pct ?? 0 }}% · 重置于 {{ countdown(account.rolling_reset_at) }}
               </div>
             </div>
 
             <div class="usage-item">
               <div class="usage-label">每周用量</div>
               <el-progress
-                :percentage="account.weekly_pct"
-                :color="progressColor(account.weekly_pct)"
+                :percentage="account.weekly_pct ?? 0"
+                :color="progressColor(account.weekly_pct ?? 0)"
                 :stroke-width="16"
               />
               <div class="usage-meta">
-                {{ account.weekly_pct }}% · 重置于 {{ countdown(account.weekly_reset_at) }}
+                {{ account.weekly_pct ?? 0 }}% · 重置于 {{ countdown(account.weekly_reset_at) }}
               </div>
             </div>
 
             <div class="usage-item">
               <div class="usage-label">每月用量</div>
               <el-progress
-                :percentage="account.monthly_pct"
-                :color="progressColor(account.monthly_pct)"
+                :percentage="account.monthly_pct ?? 0"
+                :color="progressColor(account.monthly_pct ?? 0)"
                 :stroke-width="16"
               />
               <div class="usage-meta">
-                {{ account.monthly_pct }}% · 重置于 {{ countdown(account.monthly_reset_at) }}
+                {{ account.monthly_pct ?? 0 }}% · 重置于 {{ countdown(account.monthly_reset_at) }}
               </div>
             </div>
 
@@ -203,7 +203,7 @@ onUnmounted(() => {
                 </el-text>
               </div>
               <div class="balance-detail">
-                <span>订阅 $60（{{ account.monthly_pct }}%已用）+ {{ account.reward_total }}个奖励 × ${{ (account.reward_amount_cents / 100)?.toFixed(0) || '5' }}</span>
+                <span>订阅 $60（{{ account.monthly_pct ?? 0 }}%已用）+ {{ account.reward_total }}个奖励 × ${{ ((account.reward_amount_cents ?? 500) / 100)?.toFixed(0) || '5' }}</span>
                 <span v-if="account.reward_used > 0" class="reward-used">（{{ account.reward_used }}已用 / {{ account.reward_unused }}未用）</span>
               </div>
             </div>
