@@ -1,8 +1,8 @@
 services:
   app:
-    build: .
+    image: thntime/opencode-balance:master-new-api
     ports:
-      - "${PORT}:${PORT}"
+      - "${PORT:-3456}:${PORT:-3456}"
     env_file:
       - .env
     volumes:
