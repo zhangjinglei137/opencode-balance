@@ -104,7 +104,17 @@ npm start
 
 ## Docker 部署
 
-### docker-compose
+### 从 Docker Hub 拉取（推荐）
+
+```bash
+# 拉取镜像
+docker pull zxl000/opencode-balance:latest
+
+# 运行
+docker run -d -p 3456:3456 -v ./data:/app/data --env-file .env zxl000/opencode-balance:latest
+```
+
+### docker-compose（本地构建）
 
 ```bash
 cp docker-compose.yml.example docker-compose.yml
@@ -126,10 +136,25 @@ docker run -d -p 3456:3456 -v ./data:/app/data --env-file .env opencode-balance
 ### 更新
 
 ```bash
+# Docker Hub 用户：拉取新版本
+docker pull zxl000/opencode-balance:latest
+docker compose down && docker compose up -d
+
+# 本地构建用户
 docker compose down
 docker compose build --no-cache
 docker compose up -d
 ```
+
+### CI/CD 自动发布
+
+推送代码到 master 分支或打 tag 时，GitHub Actions 自动构建多平台镜像（linux/amd64 + linux/arm64）并推送到 Docker Hub。
+
+**配置方式**：在 GitHub 仓库 Settings → Secrets and variables → Actions 中添加：
+- `DOCKER_USERNAME` — Docker Hub 用户名
+- `DOCKER_TOKEN` — Docker Hub Access Token
+
+手动发布脚本：`scripts/publish-docker.sh`
 
 ## 使用说明
 
