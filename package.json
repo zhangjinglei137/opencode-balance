@@ -1,6 +1,6 @@
 {
   "name": "opencode-go-balance-checker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "多账号 OpenCode Go 用量余额监控服务",
   "main": "server/index.js",
   "scripts": {
