@@ -12,17 +12,14 @@ const form = reactive({
   rolling_period_hours: 5,
   weekly_period_days: 7,
   monthly_period_days: 30,
-  weight_rolling: 0.1,
-  weight_weekly: 0.2,
-  weight_monthly: 0.7,
-  bonus_cap_rolling: 0.1,
-  bonus_cap_weekly: 0.2,
-  bonus_cap_monthly: 0.7,
+  endgame_days: 5,
+  accel_boost: 6,
+  accel_power: 3,
+  cap_weekly: 0.12,
+  cap_rolling: 0.05,
+  rolling_penalty_threshold: 0.9,
   tier_threshold: 0.3,
-  fuse_rolling_warn: 0.9,
   fuse_rolling_disable: 0.98,
-  fuse_weekly_warn: 0.95,
-  fuse_monthly_warn: 0.98,
   fuse_monthly_disable: 1.0,
   sync_balance_interval_minutes: 10,
   sync_priority_interval_minutes: 30,
@@ -147,23 +144,15 @@ onMounted(() => {
       <el-alert type="info" :closable="false" show-icon class="algo-desc">
         <template #title>
           <div class="desc-content">
-            <p><strong>核心思想：</strong>三周期（滚动/周度/月度）剩余率 × 时间修正系数 → 综合健康得分 → 分档 → 同档权重</p>
-            <p><strong>熔断规则：</strong></p>
+            <p><strong>核心公式：</strong>Score = 月度剩余率 × 时间加速 − 末段惩罚门 × (周度惩罚 + 滚动惩罚)</p>
+            <p><strong>时间加速：</strong>距月度重置超过末段天数时无影响(accel=1)；进入末段后非线性急升，峰值 = 1 + accel_boost</p>
+            <p><strong>周度保活（惩罚机制）：</strong>周度用量越高 + 距重置越远 → 惩罚越大（上界 cap_weekly）</p>
+            <p><strong>滚动熔断（惩罚机制）：</strong>用量超过 threshold 才触发，线性惩罚（上界 cap_rolling）</p>
+            <p><strong>末段惩罚门：</strong>进入末段后惩罚线性衰减到 0，月度信号获得绝对主导</p>
+            <p><strong>硬熔断：</strong></p>
             <ul>
-              <li>滚动用量超过熔断警告线 → 降权警告</li>
-              <li>滚动用量超过熔断禁线 → 渠道禁用</li>
-              <li>周度用量超过熔断降档线 → 优先级降档</li>
-              <li>月度用量超过熔断最低线 → 优先级降至最低</li>
-              <li>月度用量超过熔断禁线 → 渠道禁用</li>
-            </ul>
-            <p><strong>参数含义：</strong></p>
-            <ul>
-              <li><b>周期参数</b>：滚动/周度/月度三个时间窗口的长度</li>
-              <li><b>权重参数</b>：三个周期健康得分的加权系数</li>
-              <li><b>加成上限</b>：各周期剩余率加成封顶值</li>
-              <li><b>分档阈值 θ</b>：健康得分低于此值时降档</li>
-              <li><b>熔断参数</b>：各周期用量百分比的警告/禁用阈值</li>
-              <li><b>同步间隔</b>：余额和优先级自动同步的间隔时间（分钟）</li>
+              <li>滚动用量超过 fuse_rolling_disable → 渠道禁用</li>
+              <li>月度用量超过 fuse_monthly_disable → 渠道禁用</li>
             </ul>
           </div>
         </template>
@@ -250,45 +239,45 @@ onMounted(() => {
           </el-row>
         </div>
 
-        <!-- 综合得分权重 -->
+        <!-- 末段加速参数 -->
         <div class="param-group">
-          <h4 class="group-title">综合得分权重</h4>
+          <h4 class="group-title">末段加速参数</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="滚动权重">
-                <el-input-number v-model="form.weight_rolling" :min="0" :max="1" :precision="2" :step="0.1" style="width:100%" />
+              <el-form-item label="末段窗口(天)">
+                <el-input-number v-model="form.endgame_days" :min="1" :max="10" :precision="0" :step="1" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="周度权重">
-                <el-input-number v-model="form.weight_weekly" :min="0" :max="1" :precision="2" :step="0.1" style="width:100%" />
+              <el-form-item label="加速峰值附加量">
+                <el-input-number v-model="form.accel_boost" :min="1" :max="20" :precision="0" :step="1" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="月度权重">
-                <el-input-number v-model="form.weight_monthly" :min="0" :max="1" :precision="2" :step="0.1" style="width:100%" />
+              <el-form-item label="加速曲率">
+                <el-input-number v-model="form.accel_power" :min="1" :max="5" :precision="0" :step="1" style="width:100%" />
               </el-form-item>
             </el-col>
           </el-row>
         </div>
 
-        <!-- 时间修正系数加成上限 -->
+        <!-- 惩罚上界 -->
         <div class="param-group">
-          <h4 class="group-title">时间修正系数加成上限</h4>
+          <h4 class="group-title">惩罚上界</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="滚动加成">
-                <el-input-number v-model="form.bonus_cap_rolling" :min="0" :max="1" :precision="2" :step="0.1" style="width:100%" />
+              <el-form-item label="周度惩罚上限">
+                <el-input-number v-model="form.cap_weekly" :min="0" :max="1" :precision="2" :step="0.01" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="周度加成">
-                <el-input-number v-model="form.bonus_cap_weekly" :min="0" :max="1" :precision="2" :step="0.1" style="width:100%" />
+              <el-form-item label="滚动惩罚上限">
+                <el-input-number v-model="form.cap_rolling" :min="0" :max="1" :precision="2" :step="0.01" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="月度加成">
-                <el-input-number v-model="form.bonus_cap_monthly" :min="0" :max="1" :precision="2" :step="0.1" style="width:100%" />
+              <el-form-item label="滚动惩罚触发线">
+                <el-input-number v-model="form.rolling_penalty_threshold" :min="0" :max="1" :precision="2" :step="0.01" style="width:100%" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -299,30 +288,13 @@ onMounted(() => {
           <h4 class="group-title">分档与熔断</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="分档阈值 θ">
+              <el-form-item label="分档间距">
                 <el-input-number v-model="form.tier_threshold" :min="0" :max="1" :precision="2" :step="0.05" style="width:100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="滚动警告线">
-                <el-input-number v-model="form.fuse_rolling_warn" :min="0" :max="1" :precision="2" :step="0.05" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
               <el-form-item label="滚动禁用线">
                 <el-input-number v-model="form.fuse_rolling_disable" :min="0" :max="1" :precision="2" :step="0.05" style="width:100%" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="24" style="margin-top:0">
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="周度降档线">
-                <el-input-number v-model="form.fuse_weekly_warn" :min="0" :max="1" :precision="2" :step="0.05" style="width:100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="月度最低线">
-                <el-input-number v-model="form.fuse_monthly_warn" :min="0" :max="1" :precision="2" :step="0.05" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">

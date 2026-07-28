@@ -8,12 +8,12 @@ function calculatePriorities(accounts, config) {
 
   const cfg = Object.assign({
     rolling_period_hours: 5, weekly_period_days: 7, monthly_period_days: 30,
-    weight_rolling: 0.1, weight_weekly: 0.2, weight_monthly: 0.7,
-    bonus_cap_rolling: 0.1, bonus_cap_weekly: 0.2, bonus_cap_monthly: 0.7,
+    endgame_days: 5, accel_boost: 6, accel_power: 3,
+    cap_weekly: 0.12, cap_rolling: 0.05,
+    rolling_penalty_threshold: 0.9,
     tier_threshold: 0.3,
-    fuse_rolling_warn: 0.9, fuse_rolling_disable: 0.98,
-    fuse_weekly_warn: 0.95,
-    fuse_monthly_warn: 0.98, fuse_monthly_disable: 1.0,
+    fuse_rolling_disable: 0.98,
+    fuse_monthly_disable: 1.0,
   }, config);
 
   const scored = accounts.map(acc => {
@@ -34,25 +34,33 @@ function calculatePriorities(accounts, config) {
       ? Math.max(0, Math.min((new Date(acc.monthly_reset_at) - now) / 86400000, cfg.monthly_period_days))
       : cfg.monthly_period_days;
 
-    const K_r = 1 + (1 - T_r / safePeriod(cfg.rolling_period_hours, 5)) * R_r * cfg.bonus_cap_rolling;
-    const K_w = 1 + (1 - T_w / safePeriod(cfg.weekly_period_days, 7)) * R_w * cfg.bonus_cap_weekly;
-    const K_m = 1 + (1 - T_m / safePeriod(cfg.monthly_period_days, 30)) * R_m * cfg.bonus_cap_monthly;
+    // 月度基础信号（剩余多 × 时间紧）
+    function monthAccel(T_m_days, endgame_days, accel_boost, accel_power) {
+      if (T_m_days >= endgame_days) return 1;
+      return 1 + accel_boost * Math.pow(1 - T_m_days / endgame_days, accel_power);
+    }
 
-    const S = (R_r * K_r) * cfg.weight_rolling + (R_w * K_w) * cfg.weight_weekly + (R_m * K_m) * cfg.weight_monthly;
+    const M = R_m * monthAccel(T_m, cfg.endgame_days, cfg.accel_boost, cfg.accel_power);
+
+    // 周度惩罚（用量高 + 距重置远 → 惩罚大）
+    const pw = Math.min(U_w * (T_w / cfg.weekly_period_days) * cfg.cap_weekly, cfg.cap_weekly);
+
+    // 滚动惩罚（U_r > threshold 才触发，用量高 + 距重置远 → 惩罚大）
+    const pr = (U_r <= cfg.rolling_penalty_threshold) ? 0
+      : Math.min(((U_r - cfg.rolling_penalty_threshold) / (1 - cfg.rolling_penalty_threshold)) * (T_r / cfg.rolling_period_hours) * cfg.cap_rolling, cfg.cap_rolling);
+
+    // 末段惩罚门
+    const gate = Math.min(Math.max(T_m / cfg.endgame_days, 0), 1);
+
+    const S = Math.max(0, M - gate * (pw + pr));
 
     let fused = false;
     let fuse_reason = null;
-    let priorityDrop = 0;
 
     if (U_r >= cfg.fuse_rolling_disable) { fused = true; fuse_reason = 'rolling_disable'; }
-    else if (U_r >= cfg.fuse_rolling_warn) { priorityDrop += 1; }
-
-    if (U_w >= cfg.fuse_weekly_warn) { priorityDrop += 1; }
-
     if (U_m >= cfg.fuse_monthly_disable) { fused = true; fuse_reason = 'monthly_disable'; }
-    else if (U_m >= cfg.fuse_monthly_warn) { priorityDrop += 1; }
 
-    return { account_id: acc.account_id, name: acc.name, health_score: isNaN(S) ? 0 : Math.max(0, S), rolling_remain: T_r, weekly_remain: T_w, monthly_remain: T_m, fused, fuse_reason, priorityDrop };
+    return { account_id: acc.account_id, name: acc.name, health_score: isNaN(S) ? 0 : Math.max(0, S), rolling_remain: T_r, weekly_remain: T_w, monthly_remain: T_m, fused, fuse_reason };
   });
 
   scored.sort((a, b) => {
@@ -79,7 +87,7 @@ function calculatePriorities(accounts, config) {
       let priority, weight;
       if (item.fused) { priority = 1; weight = 0; }
       else {
-        priority = Math.max(1, (N - t) - item.priorityDrop);
+        priority = Math.max(1, N - t);
         // 高分=100，低分比例递减，向下取整到5的倍数确保差异化
         const raw = tierHighest > 0 ? (item.health_score / tierHighest) * 100 : 100;
         weight = Math.floor(raw / 5) * 5;

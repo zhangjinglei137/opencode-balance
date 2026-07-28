@@ -110,22 +110,35 @@ async function initDb(filePath) {
       rolling_period_hours REAL DEFAULT 5,
       weekly_period_days REAL DEFAULT 7,
       monthly_period_days REAL DEFAULT 30,
-      weight_rolling REAL DEFAULT 0.1,
-      weight_weekly REAL DEFAULT 0.2,
-      weight_monthly REAL DEFAULT 0.7,
-      bonus_cap_rolling REAL DEFAULT 0.1,
-      bonus_cap_weekly REAL DEFAULT 0.2,
-      bonus_cap_monthly REAL DEFAULT 0.7,
+      endgame_days REAL DEFAULT 5,
+      accel_boost REAL DEFAULT 6,
+      accel_power REAL DEFAULT 3,
+      cap_weekly REAL DEFAULT 0.12,
+      cap_rolling REAL DEFAULT 0.05,
+      rolling_penalty_threshold REAL DEFAULT 0.9,
       tier_threshold REAL DEFAULT 0.3,
-      fuse_rolling_warn REAL DEFAULT 0.9,
       fuse_rolling_disable REAL DEFAULT 0.98,
-      fuse_weekly_warn REAL DEFAULT 0.95,
-      fuse_monthly_warn REAL DEFAULT 0.98,
       fuse_monthly_disable REAL DEFAULT 1.0,
       sync_balance_interval_minutes INTEGER DEFAULT 10,
       sync_priority_interval_minutes INTEGER DEFAULT 30
     )
   `);
+
+  // ponytail: 兼容旧表，尝试添加缺失列
+  const algoCols = queryAll("PRAGMA table_info(algorithm_config)").map(r => r.name);
+  const newAlgoCols = [
+    { name: 'endgame_days', type: 'REAL DEFAULT 5' },
+    { name: 'accel_boost', type: 'REAL DEFAULT 6' },
+    { name: 'accel_power', type: 'REAL DEFAULT 3' },
+    { name: 'cap_weekly', type: 'REAL DEFAULT 0.12' },
+    { name: 'cap_rolling', type: 'REAL DEFAULT 0.05' },
+    { name: 'rolling_penalty_threshold', type: 'REAL DEFAULT 0.9' },
+  ];
+  for (const col of newAlgoCols) {
+    if (!algoCols.includes(col.name)) {
+      try { db.run(`ALTER TABLE algorithm_config ADD COLUMN ${col.name} ${col.type}`); } catch (_) {}
+    }
+  }
 
   // 确保有默认配置
   if (!queryOne("SELECT id FROM algorithm_config LIMIT 1")) {
@@ -292,11 +305,10 @@ function getAlgorithmConfig() {
 function updateAlgorithmConfig(params) {
   const allowed = [
     'rolling_period_hours', 'weekly_period_days', 'monthly_period_days',
-    'weight_rolling', 'weight_weekly', 'weight_monthly',
-    'bonus_cap_rolling', 'bonus_cap_weekly', 'bonus_cap_monthly',
+    'endgame_days', 'accel_boost', 'accel_power',
+    'cap_weekly', 'cap_rolling', 'rolling_penalty_threshold',
     'tier_threshold',
-    'fuse_rolling_warn', 'fuse_rolling_disable', 'fuse_weekly_warn',
-    'fuse_monthly_warn', 'fuse_monthly_disable',
+    'fuse_rolling_disable', 'fuse_monthly_disable',
     'sync_balance_interval_minutes', 'sync_priority_interval_minutes',
   ];
   const fields = [];

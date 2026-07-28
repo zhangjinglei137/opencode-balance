@@ -203,12 +203,18 @@ docker compose up -d
 3. **模拟数据**：展示已关联渠道的账号用量，可手动修改数值测试算法效果
 4. **参数配置**（分组调整）：
    - 周期参数：滚动/周度/月度周期长度
-   - 综合得分权重：三周期权重系数
-   - 时间修正系数加成上限
-   - 分档与熔断：分档阈值 + 各周期熔断线
+   - 末段加速参数：末段窗口天数、加速峰值、加速曲率
+   - 惩罚上界：周度惩罚上限、滚动惩罚上限、滚动惩罚触发线
+   - 分档与熔断：分档间距 + 滚/月度熔断禁线
    - 同步间隔：余额和优先级自动同步间隔
 5. 点击 **模拟运行** 用当前参数和（可调整的）账号数据试跑算法
 6. 点击 **保存配置** 将参数持久化
+
+**算法公式**：`Score = 月度剩余率 × 时间加速 − 末段惩罚门 × (周度惩罚 + 滚动惩罚)`
+- 月度信号：剩余越多 + 距重置越近 → 优先调度（清库存）
+- 周度惩罚：用量越高 + 距重置越远 → 惩罚越大（保活，防止触顶）
+- 滚动惩罚：用量超过 90% 触发，线性惩罚（熔断）
+- 末段惩罚门：进入最后 N 天后惩罚衰减至 0，月度获得绝对主导
 
 ### 查看用量
 
@@ -318,7 +324,7 @@ Multi-account OpenCode Go usage & balance monitor with New API channel managemen
 - Daily cost with auto-pagination + Top 5 model ranking
 - Drag & drop account reordering
 - New API channel management (balance sync + priority/weight sync)
-- Three-cycle health score algorithm for automatic channel optimization
+- Three-cycle priority algorithm with time-accelerated scoring
 - JWT password authentication
 - Responsive design (mobile / tablet / desktop)
 - Dark theme (Element Plus)
