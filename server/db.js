@@ -61,6 +61,13 @@ async function initDb(filePath) {
   if (!accCols.includes('sync_priority_enabled')) {
     try { db.run("ALTER TABLE accounts ADD COLUMN sync_priority_enabled INTEGER DEFAULT 0"); } catch (_) {}
   }
+  // ponytail: 存储上次同步的优先级/权重，避免无变化时重复写入
+  if (!accCols.includes('last_priority')) {
+    try { db.run("ALTER TABLE accounts ADD COLUMN last_priority INTEGER"); } catch (_) {}
+  }
+  if (!accCols.includes('last_weight')) {
+    try { db.run("ALTER TABLE accounts ADD COLUMN last_weight INTEGER"); } catch (_) {}
+  }
 
   db.run(`
     CREATE TABLE IF NOT EXISTS usage_snapshots (
@@ -285,7 +292,7 @@ function updateAccountChannel(id, newApiChannelId, syncBalanceEnabled, syncPrior
 }
 
 function getAccountsWithChannel() {
-  return queryAll("SELECT id, name, new_api_channel_id, sync_balance_enabled, sync_priority_enabled FROM accounts ORDER BY sort_order ASC, id ASC");
+  return queryAll("SELECT id, name, new_api_channel_id, sync_balance_enabled, sync_priority_enabled, last_priority, last_weight FROM accounts ORDER BY sort_order ASC, id ASC");
 }
 
 function addSyncLog(accountId, syncType, status, message) {
@@ -295,7 +302,7 @@ function addSyncLog(accountId, syncType, status, message) {
 }
 
 function getSyncLogs(limit = 50) {
-  return queryAll("SELECT * FROM sync_logs ORDER BY id DESC LIMIT ?", [limit]);
+  return queryAll("SELECT s.*, a.name as account_name FROM sync_logs s LEFT JOIN accounts a ON s.account_id = a.id ORDER BY s.id DESC LIMIT ?", [limit]);
 }
 
 function getAlgorithmConfig() {
@@ -325,4 +332,10 @@ function updateAlgorithmConfig(params) {
   return { ok: true };
 }
 
-module.exports = { initDb, getAccounts, getAccount, createAccount, updateAccount, deleteAccount, reorderAccounts, saveUsageSnapshot, getLatestUsage, updateAccountChannel, getAccountsWithChannel, addSyncLog, getSyncLogs, getAlgorithmConfig, updateAlgorithmConfig };
+// ponytail: 记录上次同步到 New API 的优先级/权重，用于跳过无变动同步
+function updateAccountPriority(id, priority, weight) {
+  db.run('UPDATE accounts SET last_priority = ?, last_weight = ? WHERE id = ?', [priority, weight, id]);
+  save();
+}
+
+module.exports = { initDb, getAccounts, getAccount, createAccount, updateAccount, deleteAccount, reorderAccounts, saveUsageSnapshot, getLatestUsage, updateAccountChannel, getAccountsWithChannel, updateAccountPriority, addSyncLog, getSyncLogs, getAlgorithmConfig, updateAlgorithmConfig };

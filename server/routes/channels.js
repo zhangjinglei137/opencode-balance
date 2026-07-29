@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const auth = require('../middleware/auth');
-const { getAccountsWithChannel, getLatestUsage, addSyncLog, getSyncLogs, getAlgorithmConfig } = require('../db');
+const { getAccountsWithChannel, getLatestUsage, addSyncLog, getSyncLogs, getAlgorithmConfig, updateAccountPriority } = require('../db');
 const { updateChannel } = require('../newapi-client');
 const { updateChannelBalance } = require('../pg-client');
 const { calculatePriorities } = require('../algorithm');
@@ -96,8 +96,17 @@ router.post('/sync-priority', async (req, res) => {
   for (const r of calcResults) {
     const a = accs.find(x => x.id === r.account_id);
     if (!a) continue;
+
+    // ponytail: 值未变动则跳过同步
+    if (a.last_priority === r.priority && a.last_weight === r.weight) {
+      addSyncLog(a.id, 'priority', 'skipped', `优先级 ${r.priority}, 权重 ${r.weight} 未变化，跳过同步`);
+      syncResults.push({ ...r, status: 'skipped', reason: '值未变化' });
+      continue;
+    }
+
     try {
       await updateChannel(a.new_api_channel_id, { priority: r.priority, weight: r.weight });
+      updateAccountPriority(a.id, r.priority, r.weight);
       addSyncLog(a.id, 'priority', 'success', `优先级 ${r.priority}, 权重 ${r.weight} 同步成功`);
       syncResults.push({ ...r, status: 'success' });
     } catch (err) {
@@ -150,8 +159,16 @@ async function runPrioritySync() {
   for (const r of results) {
     const a = accs.find(x => x.id === r.account_id);
     if (!a) continue;
+
+    // ponytail: 值未变动则跳过同步
+    if (a.last_priority === r.priority && a.last_weight === r.weight) {
+      addSyncLog(a.id, 'priority', 'skipped', `优先级 ${r.priority}, 权重 ${r.weight} 未变化，跳过自动同步`);
+      continue;
+    }
+
     try {
       await updateChannel(a.new_api_channel_id, { priority: r.priority, weight: r.weight });
+      updateAccountPriority(a.id, r.priority, r.weight);
       addSyncLog(a.id, 'priority', 'success', `优先级 ${r.priority}, 权重 ${r.weight} 自动同步`);
     } catch (err) {
       addSyncLog(a.id, 'priority', 'error', `自动同步失败: ${err.message}`);
