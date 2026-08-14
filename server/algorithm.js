@@ -1,10 +1,9 @@
-// ponytail: v3 优先级/权重算法——门控紧迫度模型（S = Q_m + α×urgency×gate，周因子惩罚，对数权重映射）
+// ponytail: v4 优先级/权重算法——激进阶梯版（S = 剩余金额 × 档位倍率 × 周因子，档内线性权重）
 const DEFAULTS = {
   rolling_period_hours: 5, weekly_period_days: 7, monthly_period_days: 30,
-  t_min: 0.5, c_w: 1.0, k: 2, S_0: 0.3, gamma: 1.5, W_floor: 5,
-  F_w: 0.98, T_w_fuse: 0.5,
+  c_w: 1.0, k: 2, F_w: 0.98, T_w_fuse: 0.5,
   fuse_rolling_disable: 0.95, fuse_monthly_disable: 0.99,
-  urgency_alpha: 3, endgame_days: 5, urgency_power: 1, q_gate: 0.05,
+  tier_break_crazy: 2, tier_break_accel: 5, tier_mult_crazy: 100, tier_mult_accel: 20,
 };
 
 const miss = (v) => v === null || v === undefined;
@@ -63,40 +62,40 @@ function calculatePriorities(accounts, config) {
     if (!fused && u_w !== null && u_w >= cfg.F_w && T_w >= cfg.T_w_fuse) { fused = true; fuse_reason = 'weekly_disable'; }
     if (!fused && u_m !== null && u_m >= cfg.fuse_monthly_disable) { fused = true; fuse_reason = 'monthly_disable'; }
 
-    // v3 门控紧迫度：S = Q_m + α × urgency × gate（T_m 只进 urgency 不除，t_min 兜底防除零）
-    const T_m_eff = Math.max(T_m, cfg.t_min);
-    const urgency = q_m === null ? 0 : Math.pow(Math.max(0, 1 - T_m_eff / cfg.endgame_days), cfg.urgency_power);
-    const gate = q_m === null ? 0 : Math.min(1, q_m / cfg.q_gate);
-    const S = q_m === null ? 0 : q_m + cfg.urgency_alpha * urgency * gate;
+    // v4 激进阶梯：R = 60×Q_m 剩余金额，tier_mult 按 T_m 分档（疯狂<2 / 加速2-5 / 正常≥5）
+    const R = q_m === null ? 0 : 60 * q_m;
+    let tierMult, tier;
+    if (T_m < cfg.tier_break_crazy) { tierMult = cfg.tier_mult_crazy; tier = 3; }
+    else if (T_m < cfg.tier_break_accel) { tierMult = cfg.tier_mult_accel; tier = 2; }
+    else { tierMult = 1; tier = 1; }
     const W = u_w === null ? 1 : Math.min(Math.max(1 - cfg.c_w * Math.pow(u_w, cfg.k) * (T_w / cfg.weekly_period_days), 0), 1);
-    const S_eff = S * W;
+    const S_eff = R * tierMult * W;
 
-    // P1-5: stale——刚过月度重置点但 pct 未归零（仅标记，不熔断；t_min 已防爆表）
+    // P1-5: stale——刚过月度重置点但 pct 未归零（仅标记，不熔断）
     const stale = !fused && u_m !== null && u_m > 0 && T_m <= 0;
 
-    return { account_id: acc.account_id, name: acc.name, S_eff, q_m, T_r, T_w, T_m, fused, fuse_reason, weekly_factor: W, stale };
+    return { account_id: acc.account_id, name: acc.name, S_eff, q_m, T_r, T_w, T_m, tier, fused, fuse_reason, weekly_factor: W, stale };
   });
 
   const active = scored.filter(s => !s.fused);
-  const sMax = active.length ? Math.max(...active.map(s => s.S_eff)) : 0;
+  // 每档内 S 最高者 weight=100，其余按比例（档内线性归一化）
+  const tierMax = {};
+  for (const s of active) tierMax[s.tier] = Math.max(tierMax[s.tier] ?? 0, s.S_eff);
 
   const result = scored.map(s => {
     let weight;
     if (s.fused) {
       weight = 0;
-    } else if (!isFinite(sMax) || sMax <= cfg.S_0) {
-      weight = 100; // S_max 无效或过低 → 均分
     } else {
-      // 先算完幂再 clamp，NaN 或负（S_eff < S_0 时 ln 为负）→ W_floor
-      const ratio = Math.pow(Math.log(s.S_eff / cfg.S_0) / Math.log(sMax / cfg.S_0), cfg.gamma);
-      weight = (isNaN(ratio) || ratio < 0) ? cfg.W_floor : Math.min(Math.max(Math.round(100 * ratio), cfg.W_floor), 100);
+      const tm = tierMax[s.tier] || 0;
+      weight = tm > 0 ? Math.max(1, Math.round(100 * s.S_eff / tm)) : 100;
     }
     return {
       account_id: s.account_id, name: s.name,
       burn_rate: Math.round(s.S_eff * 10000) / 10000,
-      priority: 1,
+      priority: s.fused ? 1 : s.tier,
       weight,
-      tier: 1,
+      tier: s.tier,
       rolling_remain: Math.round(s.T_r * 100) / 100,
       weekly_remain: Math.round(s.T_w * 100) / 100,
       monthly_remain: Math.round(s.T_m * 100) / 100,

@@ -224,7 +224,7 @@ function handleVisibilityChange() {
           {{ row.calculated_weight ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="烧速率" width="100" align="right">
+      <el-table-column label="调度分" width="100" align="right">
         <template #default="{ row }">{{ fmtRate(row.burn_rate) }}</template>
       </el-table-column>
       <el-table-column label="周因子" width="100" align="right">

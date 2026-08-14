@@ -136,6 +136,10 @@ async function initDb(filePath) {
       urgency_alpha REAL DEFAULT 3,
       urgency_power REAL DEFAULT 1,
       q_gate REAL DEFAULT 0.05,
+      tier_break_crazy REAL DEFAULT 2,
+      tier_break_accel REAL DEFAULT 5,
+      tier_mult_crazy REAL DEFAULT 100,
+      tier_mult_accel REAL DEFAULT 20,
       sync_balance_interval_minutes INTEGER DEFAULT 10,
       sync_priority_interval_minutes INTEGER DEFAULT 30
     )
@@ -156,6 +160,10 @@ async function initDb(filePath) {
     { name: 'urgency_alpha', type: 'REAL DEFAULT 3' },
     { name: 'urgency_power', type: 'REAL DEFAULT 1' },
     { name: 'q_gate', type: 'REAL DEFAULT 0.05' },
+    { name: 'tier_break_crazy', type: 'REAL DEFAULT 2' },
+    { name: 'tier_break_accel', type: 'REAL DEFAULT 5' },
+    { name: 'tier_mult_crazy', type: 'REAL DEFAULT 100' },
+    { name: 'tier_mult_accel', type: 'REAL DEFAULT 20' },
   ];
   for (const col of newAlgoCols) {
     if (!algoCols.includes(col.name)) {
@@ -332,8 +340,8 @@ function updateAlgorithmConfig(params) {
     'rolling_period_hours', 'weekly_period_days', 'monthly_period_days',
     'fuse_rolling_disable', 'fuse_monthly_disable',
     'sync_balance_interval_minutes', 'sync_priority_interval_minutes',
-    't_min', 'c_w', 'k', 'S_0', 'gamma', 'W_floor', 'F_w', 'T_w_fuse',
-    'endgame_days', 'urgency_alpha', 'urgency_power', 'q_gate',
+    'c_w', 'k', 'F_w', 'T_w_fuse',
+    'tier_break_crazy', 'tier_break_accel', 'tier_mult_crazy', 'tier_mult_accel',
   ];
   const fields = [];
   const vals = [];

@@ -12,16 +12,12 @@ const form = reactive({
   rolling_period_hours: 5,
   weekly_period_days: 7,
   monthly_period_days: 30,
-  urgency_alpha: 3,
-  endgame_days: 5,
-  urgency_power: 1,
-  q_gate: 0.05,
-  t_min: 0.5,
+  tier_break_crazy: 2,
+  tier_break_accel: 5,
+  tier_mult_crazy: 100,
+  tier_mult_accel: 20,
   c_w: 1.0,
   k: 2,
-  S_0: 0.3,
-  gamma: 1.5,
-  W_floor: 5,
   F_w: 0.98,
   T_w_fuse: 0.5,
   fuse_rolling_disable: 0.95,
@@ -149,12 +145,11 @@ onMounted(() => {
       <el-alert type="info" :closable="false" show-icon class="algo-desc">
         <template #title>
           <div class="desc-content">
-            <p><strong>综合得分（S）：</strong>S = 月度剩余比例 + urgency_alpha × 时间紧迫度 × 金额门控</p>
-            <p><strong>时间紧迫度：</strong>(1 − T_m / endgame_days)^urgency_power —— 进入末段窗口后非线性急升</p>
-            <p><strong>金额门控：</strong>min(1, 月度剩余比例 / q_gate) —— 余额逼近阈值时放行</p>
+            <p><strong>调度分（S）：</strong>S = 剩余金额($) × 阶梯倍率 × 周因子</p>
+            <p><strong>阶梯倍率：</strong>剩余 &lt; 2 天 → ×100（疯狂）；2–5 天 → ×20（加速）；≥ 5 天 → ×1（正常）</p>
             <p><strong>周因子（W）：</strong>W = 1 − U_w² × (T_w / 7)，乘法衰减（上界 c_w）—— 周度用量越高、距重置越远，衰减越强</p>
-            <p><strong>weight 映射：</strong>burn_rate = S × W，经对数映射（基准 S_0、拉伸 gamma）换算为 weight（W_floor–100）</p>
-            <p><strong>软加权：</strong>全部渠道 priority=1，仅靠 weight 差异化分配流量</p>
+            <p><strong>priority 硬分层：</strong>疯狂=3 / 加速=2 / 正常=1（数字大优先，疯狂档独占流量）</p>
+            <p><strong>weight：</strong>档内按调度分线性归一化到 5–100</p>
             <p><strong>硬熔断：</strong></p>
             <ul>
               <li>滚动用量 ≥ 95%（fuse_rolling_disable）→ 渠道禁用</li>
@@ -246,45 +241,28 @@ onMounted(() => {
           </el-row>
         </div>
 
-        <!-- 紧迫度门控 -->
+        <!-- 阶梯档位 -->
         <div class="param-group">
-          <h4 class="group-title">紧迫度门控</h4>
+          <h4 class="group-title">阶梯档位</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="紧迫度峰值 urgency_alpha">
-                <el-input-number v-model="form.urgency_alpha" :min="0" :max="10" :precision="1" :step="0.5" style="width:100%" />
+              <el-form-item label="疯狂档断点(天) tier_break_crazy">
+                <el-input-number v-model="form.tier_break_crazy" :min="0" :max="10" :precision="1" :step="0.5" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="末段窗口(天) endgame_days">
-                <el-input-number v-model="form.endgame_days" :min="1" :max="30" :precision="0" :step="1" style="width:100%" />
+              <el-form-item label="加速档断点(天) tier_break_accel">
+                <el-input-number v-model="form.tier_break_accel" :min="0" :max="30" :precision="1" :step="0.5" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="紧迫度曲率 urgency_power">
-                <el-input-number v-model="form.urgency_power" :min="0.1" :max="5" :precision="1" :step="0.1" style="width:100%" />
+              <el-form-item label="疯狂倍率 tier_mult_crazy">
+                <el-input-number v-model="form.tier_mult_crazy" :min="1" :max="1000" :precision="0" :step="10" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="金额门控阈值 q_gate">
-                <el-input-number v-model="form.q_gate" :min="0.01" :max="1" :precision="2" :step="0.01" style="width:100%" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </div>
-
-        <!-- 烧速率映射 -->
-        <div class="param-group">
-          <h4 class="group-title">烧速率映射</h4>
-          <el-row :gutter="24">
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="月余下限(天) t_min">
-                <el-input-number v-model="form.t_min" :min="0" :max="30" :precision="1" :step="0.1" style="width:100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="对数映射基准 S_0">
-                <el-input-number v-model="form.S_0" :min="0.01" :max="10" :precision="2" :step="0.05" style="width:100%" />
+              <el-form-item label="加速倍率 tier_mult_accel">
+                <el-input-number v-model="form.tier_mult_accel" :min="1" :max="100" :precision="0" :step="1" style="width:100%" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -302,23 +280,6 @@ onMounted(() => {
             <el-col :xs="24" :sm="12" :md="8">
               <el-form-item label="周因子幂次 k">
                 <el-input-number v-model="form.k" :min="1" :max="10" :precision="0" :step="1" style="width:100%" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </div>
-
-        <!-- weight 拉伸 -->
-        <div class="param-group">
-          <h4 class="group-title">weight 拉伸</h4>
-          <el-row :gutter="24">
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="weight 拉伸 gamma">
-                <el-input-number v-model="form.gamma" :min="0.1" :max="10" :precision="2" :step="0.1" style="width:100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="weight 地板 W_floor">
-                <el-input-number v-model="form.W_floor" :min="1" :max="100" :precision="0" :step="1" style="width:100%" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -384,7 +345,7 @@ onMounted(() => {
         <el-table-column label="账号名" min-width="120">
           <template #default="{ row }">{{ row.name || row.account_name || '-' }}</template>
         </el-table-column>
-        <el-table-column label="烧速率" width="100" align="right">
+        <el-table-column label="调度分" width="100" align="right">
           <template #default="{ row }">{{ (row.burn_rate ?? row.score)?.toFixed(2) ?? '-' }}</template>
         </el-table-column>
         <el-table-column label="周因子" width="90" align="right">
