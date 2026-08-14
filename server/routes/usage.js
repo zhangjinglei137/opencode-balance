@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const auth = require('../middleware/auth');
 const { getAccounts, getAccount, getLatestUsage, saveUsageSnapshot } = require('../db');
-const { fetchUsage, fetchDailyUsage } = require('../scraper');
+const { fetchUsage, fetchDailyUsage, fetchApplyServerId } = require('../scraper');
 const log = require('../logger');
 
 const router = Router();
@@ -92,6 +92,14 @@ router.post('/rewards/apply', async (req, res) => {
   if (!account) return res.status(404).json({ error: '账号不存在' });
 
   const cookieStr = account.auth_cookie.includes('auth=') ? account.auth_cookie : `auth=${account.auth_cookie}`;
+
+  let serverId;
+  try {
+    serverId = await fetchApplyServerId(account.workspace_id, account.auth_cookie);
+  } catch (err) {
+    return res.status(502).json({ error: `应用奖励失败：${err.message}` });
+  }
+
   const body = JSON.stringify({
     t: { t: 9, i: 0, l: 2, a: [{ t: 1, s: account.workspace_id }, { t: 1, s: referralId }], o: 0 },
     f: 31,
@@ -109,7 +117,7 @@ router.post('/rewards/apply', async (req, res) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Origin': 'https://opencode.ai',
         'Referer': `https://opencode.ai/workspace/${account.workspace_id}/go`,
-        'x-server-id': 'go.referral.reward.apply',
+        'x-server-id': serverId,
         'x-server-instance': 'server-fn:0',
       },
       body,

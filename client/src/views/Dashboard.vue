@@ -203,12 +203,23 @@ onUnmounted(() => {
               <template v-if="account.daily_cost != null">
                 <div class="daily-header">今日用量</div>
                 <div class="daily-total">${{ account.daily_cost.toFixed(4) }}</div>
-                <div v-if="account.topModels && account.topModels.length > 0" class="top-models">
+                <div class="top-models">
                   <div class="daily-header" style="margin-top:8px">Top 模型</div>
-                  <div v-for="m in account.topModels" :key="m.name" class="model-row">
-                    <span class="model-name">{{ m.name }}</span>
-                    <span class="model-cost">${{ m.cost.toFixed(4) }}</span>
-                    <span class="model-count">{{ m.count }}次</span>
+                  <div class="top-models-list">
+                    <template v-if="account.topModels && account.topModels.length > 0">
+                      <div v-for="m in account.topModels.slice(0, 3)" :key="m.name" class="model-row">
+                        <span class="model-name">{{ m.name }}</span>
+                        <span class="model-cost">${{ m.cost.toFixed(4) }}</span>
+                        <span class="model-count">{{ m.count }}次</span>
+                      </div>
+                      <div v-for="i in (3 - Math.min(account.topModels.length, 3))" :key="'empty-model-' + i" class="model-row model-row-empty"></div>
+                    </template>
+                    <template v-else>
+                      <div class="model-row">
+                        <span class="model-placeholder">暂无模型数据</span>
+                      </div>
+                      <div v-for="i in 2" :key="'empty-model-' + i" class="model-row model-row-empty"></div>
+                    </template>
                   </div>
                 </div>
               </template>
@@ -415,14 +426,25 @@ onUnmounted(() => {
 
 .top-models {
   margin-top: 2px;
-  max-height: 72px;
-  overflow: hidden;
+}
+
+.top-models-list {
+  height: 72px;
 }
 
 .model-row {
   display: flex;
   align-items: center;
   padding: 3px 0;
+  font-size: 12px;
+}
+
+.model-row-empty {
+  visibility: hidden;
+}
+
+.model-placeholder {
+  color: #475569;
   font-size: 12px;
 }
 
@@ -518,6 +540,12 @@ onUnmounted(() => {
   }
   .model-row {
     font-size: 11px;
+  }
+  .model-placeholder {
+    font-size: 11px;
+  }
+  .top-models-list {
+    height: 66px;
   }
   .reward-email {
     font-size: 11px;

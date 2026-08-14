@@ -172,4 +172,27 @@ function buildPageHeaders(authCookie) {
   };
 }
 
-module.exports = { fetchUsage, fetchDailyUsage };
+// 从 JS bundle 动态提取 go.referral.reward.apply 的 server-id（64 位 hex hash，每次部署可能变化）
+async function fetchApplyServerId(workspaceId, authCookie) {
+  const headers = buildPageHeaders(authCookie);
+  const resp = await fetch(`https://opencode.ai/workspace/${encodeURIComponent(workspaceId)}/go`, { headers, redirect: "follow" });
+  if (!resp.ok) {
+    if (resp.status === 401 || resp.status === 403) throw new Error("认证过期，请更新 auth cookie");
+    throw new Error(`HTTP ${resp.status}`);
+  }
+  const html = await resp.text();
+  const bundlePaths = [...new Set(
+    [...html.matchAll(/(?:href|src)="(\/_build\/assets\/[^"]+\.js)"/g)].map(m => m[1])
+  )];
+  const idRegex = /createServerReference\("([a-f0-9]{64})"\)[\s\S]{0,300}?"go\.referral\.reward\.apply"/;
+  for (const bundlePath of bundlePaths) {
+    const bundleResp = await fetch(`https://opencode.ai${bundlePath}`, { headers, redirect: "follow" });
+    if (!bundleResp.ok) continue;
+    const src = await bundleResp.text();
+    const m = src.match(idRegex);
+    if (m) return m[1];
+  }
+  throw new Error("未找到应用奖励接口的 server-id");
+}
+
+module.exports = { fetchUsage, fetchDailyUsage, fetchApplyServerId };
