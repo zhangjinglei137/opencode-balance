@@ -108,7 +108,7 @@ async function fetchDailyUsage(workspaceId, authCookie) {
   }
 
   const topModels = Object.entries(modelTotals)
-    .sort((a, b) => b[1].cost - a[1].cost)
+    .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 5)
     .map(([name, data]) => ({
       name,
