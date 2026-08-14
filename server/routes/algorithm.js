@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const auth = require('../middleware/auth');
 const { getAlgorithmConfig, updateAlgorithmConfig } = require('../db');
-const { calculatePriorities } = require('../algorithm');
+const { calculatePriorities, normalizeUsage } = require('../algorithm');
 const { getLatestUsage, getAccountsWithChannel } = require('../db');
 
 const router = Router();
@@ -29,20 +29,12 @@ router.post('/simulate', (req, res) => {
 
   let inputs;
   if (req.body.manual_inputs) {
-    inputs = req.body.manual_inputs;
+    inputs = (req.body.manual_inputs || []).map(i => ({ account_id: i.account_id, name: i.name, ...normalizeUsage(i) }));
   } else {
     const accs = getAccountsWithChannel().filter(a => a.new_api_channel_id);
     const usageMap = {};
     getLatestUsage().forEach(u => { usageMap[u.id] = u; });
-    inputs = accs.map(a => ({
-      account_id: a.id, name: a.name,
-      rolling_pct: usageMap[a.id]?.rolling_pct ?? 0,
-      weekly_pct: usageMap[a.id]?.weekly_pct ?? 0,
-      monthly_pct: usageMap[a.id]?.monthly_pct ?? 100,
-      rolling_reset_at: usageMap[a.id]?.rolling_reset_at,
-      weekly_reset_at: usageMap[a.id]?.weekly_reset_at,
-      monthly_reset_at: usageMap[a.id]?.monthly_reset_at,
-    }));
+    inputs = accs.map(a => ({ account_id: a.id, name: a.name, ...normalizeUsage(usageMap[a.id] || {}) }));
   }
 
   const results = calculatePriorities(inputs, config);

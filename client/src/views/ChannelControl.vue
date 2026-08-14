@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getChannelStatus, syncBalance, syncPriority, getSyncLogs, updateAccount } from '../api'
 
@@ -9,6 +9,7 @@ const syncBalanceLoading = ref(false)
 const syncPriorityLoading = ref(false)
 const logs = ref([])
 const logsLoading = ref(false)
+let pollTimer = null
 
 function fmtBalance(v) {
   if (v == null || v === '') return '-'
@@ -20,7 +21,7 @@ function fmtPct(v) {
   return Number(v).toFixed(1) + '%'
 }
 
-function fmtHealth(v) {
+function fmtRate(v) {
   if (v == null || v === '') return '-'
   return Number(v).toFixed(2)
 }
@@ -40,7 +41,12 @@ async function loadChannels() {
         ...a,
         calculated_priority: p ? p.priority : null,
         calculated_weight: p ? p.weight : null,
-        health_score: p ? p.health_score : null,
+        burn_rate: p ? p.burn_rate : null,
+        weekly_factor: p ? p.weekly_factor : null,
+        tier: p ? p.tier : null,
+        fused: p ? p.fused : false,
+        fallback: p ? p.fallback : false,
+        stale: p ? p.stale : false,
       }
     })
   } catch {
@@ -128,10 +134,33 @@ function syncTypeText(t) {
   return t
 }
 
+function rowClass({ row }) {
+  if (row.fused && row.fallback) return 'fallback-row'
+  if (row.fused) return 'fused-row'
+  return ''
+}
+
+function isVisible() {
+  return document.visibilityState === 'visible'
+}
+
 onMounted(() => {
   loadChannels()
   loadLogs()
+  pollTimer = setInterval(() => {
+    if (isVisible()) loadChannels()
+  }, 30000)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
+
+function handleVisibilityChange() {
+  if (isVisible()) loadChannels()
+}
 </script>
 
 <template>
@@ -147,9 +176,14 @@ onMounted(() => {
     </div>
 
     <!-- 渠道映射表 -->
-    <el-table :data="channels" v-loading="loading" class="channel-table" empty-text="暂无渠道数据">
+    <el-table :data="channels" v-loading="loading" class="channel-table" empty-text="暂无渠道数据" :row-class-name="rowClass">
       <el-table-column label="账号名称" min-width="120">
-        <template #default="{ row }">{{ row.name || row.account?.name || '-' }}</template>
+        <template #default="{ row }">
+          {{ row.name || row.account?.name || '-' }}
+          <el-tag v-if="row.fused && row.fallback" size="small" type="warning" effect="dark" class="fused-tag">熔断·保底</el-tag>
+          <el-tag v-else-if="row.fused" size="small" type="danger" effect="dark" class="fused-tag">熔断</el-tag>
+          <el-tag v-else-if="row.stale" size="small" type="info" effect="dark" class="fused-tag">过期</el-tag>
+        </template>
       </el-table-column>
       <el-table-column label="New API 渠道 ID" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">
@@ -190,8 +224,11 @@ onMounted(() => {
           {{ row.calculated_weight ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="健康得分" width="100" align="right">
-        <template #default="{ row }">{{ fmtHealth(row.health_score) }}</template>
+      <el-table-column label="烧速率" width="100" align="right">
+        <template #default="{ row }">{{ fmtRate(row.burn_rate) }}</template>
+      </el-table-column>
+      <el-table-column label="周因子" width="100" align="right">
+        <template #default="{ row }">{{ fmtRate(row.weekly_factor) }}</template>
       </el-table-column>
     </el-table>
 
@@ -243,6 +280,26 @@ onMounted(() => {
 .channel-id.unbound {
   color: #64748b;
   font-style: italic;
+}
+
+.fused-tag {
+  margin-left: 8px;
+}
+
+.channel-table :deep(.fused-row > td) {
+  background: rgba(245, 108, 108, 0.06) !important;
+}
+
+.channel-table :deep(.fused-row:hover > td) {
+  background: rgba(245, 108, 108, 0.1) !important;
+}
+
+.channel-table :deep(.fallback-row > td) {
+  background: rgba(230, 162, 60, 0.07) !important;
+}
+
+.channel-table :deep(.fallback-row:hover > td) {
+  background: rgba(230, 162, 60, 0.12) !important;
 }
 
 .log-section {

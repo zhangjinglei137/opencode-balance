@@ -3,7 +3,7 @@ const auth = require('../middleware/auth');
 const { getAccountsWithChannel, getLatestUsage, addSyncLog, getSyncLogs, getAlgorithmConfig, updateAccountPriority } = require('../db');
 const { updateChannel } = require('../newapi-client');
 const { updateChannelBalance } = require('../pg-client');
-const { calculatePriorities } = require('../algorithm');
+const { calculatePriorities, normalizeUsage } = require('../algorithm');
 const log = require('../logger');
 
 const router = Router();
@@ -19,27 +19,26 @@ router.get('/', (req, res) => {
 
   const accounts = accs.map(a => {
     const u = usageMap[a.id];
+    const nu = normalizeUsage(u || {});
     const item = {
       id: a.id, name: a.name,
       new_api_channel_id: a.new_api_channel_id,
       sync_balance_enabled: !!a.sync_balance_enabled,
       sync_priority_enabled: !!a.sync_priority_enabled,
-      rolling_pct: u ? (u.rolling_pct ?? 100) : 0,
-      weekly_pct: u ? (u.weekly_pct ?? 100) : 0,
-      monthly_pct: u ? (u.monthly_pct ?? 100) : 0,
-      rolling_reset_at: u?.rolling_reset_at || null,
-      weekly_reset_at: u?.weekly_reset_at || null,
-      monthly_reset_at: u?.monthly_reset_at || null,
-      balance_remaining: u
-        ? Math.round((60 * (1 - (u.monthly_pct ?? 100) / 100) + (u.reward_unused ?? 0) * ((u.reward_amount_cents ?? 500) / 100)) * 100) / 100
+      rolling_pct: nu.rolling_pct,
+      weekly_pct: nu.weekly_pct,
+      monthly_pct: nu.monthly_pct,
+      rolling_reset_at: nu.rolling_reset_at,
+      weekly_reset_at: nu.weekly_reset_at,
+      monthly_reset_at: nu.monthly_reset_at,
+      // P1-6: u 恒 truthy（LEFT JOIN），无月度数据 → null（前端显示"-"）
+      balance_remaining: u.monthly_pct != null
+        ? Math.round((60 * (1 - u.monthly_pct / 100) + (u.reward_unused ?? 0) * ((u.reward_amount_cents ?? 500) / 100)) * 100) / 100
         : null,
     };
-    if (a.new_api_channel_id && a.sync_priority_enabled && u) {
-      algoInputs.push({
-        account_id: a.id, name: a.name,
-        rolling_pct: u.rolling_pct ?? 100, weekly_pct: u.weekly_pct ?? 100, monthly_pct: u.monthly_pct ?? 100,
-        rolling_reset_at: u.rolling_reset_at, weekly_reset_at: u.weekly_reset_at, monthly_reset_at: u.monthly_reset_at,
-      });
+    // data_missing 账号不参与排序但传入算法（算法会熔断它）
+    if (a.new_api_channel_id && a.sync_priority_enabled) {
+      algoInputs.push({ account_id: a.id, name: a.name, ...nu });
     }
     return item;
   });
@@ -82,12 +81,8 @@ router.post('/sync-priority', async (req, res) => {
   getLatestUsage().forEach(u => { usageMap[u.id] = u; });
 
   const algoInputs = accs.map(a => {
-    const u = usageMap[a.id];
-    return {
-      account_id: a.id, name: a.name,
-      rolling_pct: u?.rolling_pct ?? 100, weekly_pct: u?.weekly_pct ?? 100, monthly_pct: u?.monthly_pct ?? 100,
-      rolling_reset_at: u?.rolling_reset_at, weekly_reset_at: u?.weekly_reset_at, monthly_reset_at: u?.monthly_reset_at,
-    };
+    const nu = normalizeUsage(usageMap[a.id] || {});
+    return { account_id: a.id, name: a.name, ...nu };
   });
 
   const calcResults = calculatePriorities(algoInputs, config);
@@ -148,12 +143,8 @@ async function runPrioritySync() {
   const usageMap = {};
   getLatestUsage().forEach(u => { usageMap[u.id] = u; });
   const algoInputs = accs.map(a => {
-    const u = usageMap[a.id];
-    return {
-      account_id: a.id, name: a.name,
-      rolling_pct: u?.rolling_pct ?? 100, weekly_pct: u?.weekly_pct ?? 100, monthly_pct: u?.monthly_pct ?? 100,
-      rolling_reset_at: u?.rolling_reset_at, weekly_reset_at: u?.weekly_reset_at, monthly_reset_at: u?.monthly_reset_at,
-    };
+    const nu = normalizeUsage(usageMap[a.id] || {});
+    return { account_id: a.id, name: a.name, ...nu };
   });
   const results = calculatePriorities(algoInputs, config);
   for (const r of results) {

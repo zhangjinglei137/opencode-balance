@@ -122,15 +122,16 @@ async function initDb(filePath) {
       rolling_period_hours REAL DEFAULT 5,
       weekly_period_days REAL DEFAULT 7,
       monthly_period_days REAL DEFAULT 30,
-      endgame_days REAL DEFAULT 5,
-      accel_boost REAL DEFAULT 6,
-      accel_power REAL DEFAULT 3,
-      cap_weekly REAL DEFAULT 0.12,
-      cap_rolling REAL DEFAULT 0.05,
-      rolling_penalty_threshold REAL DEFAULT 0.9,
-      tier_threshold REAL DEFAULT 0.3,
-      fuse_rolling_disable REAL DEFAULT 0.98,
-      fuse_monthly_disable REAL DEFAULT 1.0,
+      fuse_rolling_disable REAL DEFAULT 0.95,
+      fuse_monthly_disable REAL DEFAULT 0.99,
+      t_min REAL DEFAULT 0.5,
+      c_w REAL DEFAULT 1.0,
+      k REAL DEFAULT 2,
+      S_0 REAL DEFAULT 0.3,
+      gamma REAL DEFAULT 1.0,
+      W_floor INTEGER DEFAULT 5,
+      F_w REAL DEFAULT 0.98,
+      T_w_fuse REAL DEFAULT 0.5,
       sync_balance_interval_minutes INTEGER DEFAULT 10,
       sync_priority_interval_minutes INTEGER DEFAULT 30
     )
@@ -139,12 +140,14 @@ async function initDb(filePath) {
   // ponytail: 兼容旧表，尝试添加缺失列
   const algoCols = queryAll("PRAGMA table_info(algorithm_config)").map(r => r.name);
   const newAlgoCols = [
-    { name: 'endgame_days', type: 'REAL DEFAULT 5' },
-    { name: 'accel_boost', type: 'REAL DEFAULT 6' },
-    { name: 'accel_power', type: 'REAL DEFAULT 3' },
-    { name: 'cap_weekly', type: 'REAL DEFAULT 0.12' },
-    { name: 'cap_rolling', type: 'REAL DEFAULT 0.05' },
-    { name: 'rolling_penalty_threshold', type: 'REAL DEFAULT 0.9' },
+    { name: 't_min', type: 'REAL DEFAULT 0.5' },
+    { name: 'c_w', type: 'REAL DEFAULT 1.0' },
+    { name: 'k', type: 'REAL DEFAULT 2' },
+    { name: 'S_0', type: 'REAL DEFAULT 0.3' },
+    { name: 'gamma', type: 'REAL DEFAULT 1.0' },
+    { name: 'W_floor', type: 'INTEGER DEFAULT 5' },
+    { name: 'F_w', type: 'REAL DEFAULT 0.98' },
+    { name: 'T_w_fuse', type: 'REAL DEFAULT 0.5' },
   ];
   for (const col of newAlgoCols) {
     if (!algoCols.includes(col.name)) {
@@ -271,6 +274,7 @@ function getLatestUsage() {
               fetched_at, error,
              ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY id DESC) as rn
       FROM usage_snapshots
+      WHERE error IS NULL
     ) s ON a.id = s.account_id AND s.rn = 1
     ORDER BY a.sort_order ASC, a.id ASC
   `);
@@ -318,11 +322,9 @@ function getAlgorithmConfig() {
 function updateAlgorithmConfig(params) {
   const allowed = [
     'rolling_period_hours', 'weekly_period_days', 'monthly_period_days',
-    'endgame_days', 'accel_boost', 'accel_power',
-    'cap_weekly', 'cap_rolling', 'rolling_penalty_threshold',
-    'tier_threshold',
     'fuse_rolling_disable', 'fuse_monthly_disable',
     'sync_balance_interval_minutes', 'sync_priority_interval_minutes',
+    't_min', 'c_w', 'k', 'S_0', 'gamma', 'W_floor', 'F_w', 'T_w_fuse',
   ];
   const fields = [];
   const vals = [];

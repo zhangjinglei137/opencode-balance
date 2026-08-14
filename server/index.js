@@ -42,8 +42,10 @@ if (fs.existsSync(distDir)) {
 (async () => {
   await initDb();
   log.info('数据库初始化完成');
-  pollAll();
-  setInterval(pollAll, POLL_INTERVAL);
+  // P0-1: 抓取完成后立即触发优先级同步（内部有值未变化跳过逻辑），30 分钟定时器保留作兜底
+  const pollAndSync = () => pollAll().then(() => runPrioritySync().catch(err => log.error(`抓取后优先级同步失败: ${err.message}`)));
+  pollAndSync();
+  setInterval(pollAndSync, POLL_INTERVAL);
   app.listen(PORT, () => log.info(`Server v${require('../package.json').version} running on http://localhost:${PORT}`));
 
   // New API 同步定时器

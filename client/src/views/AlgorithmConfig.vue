@@ -12,15 +12,16 @@ const form = reactive({
   rolling_period_hours: 5,
   weekly_period_days: 7,
   monthly_period_days: 30,
-  endgame_days: 5,
-  accel_boost: 6,
-  accel_power: 3,
-  cap_weekly: 0.12,
-  cap_rolling: 0.05,
-  rolling_penalty_threshold: 0.9,
-  tier_threshold: 0.3,
-  fuse_rolling_disable: 0.98,
-  fuse_monthly_disable: 1.0,
+  t_min: 0.5,
+  c_w: 1.0,
+  k: 2,
+  S_0: 0.3,
+  gamma: 1.0,
+  W_floor: 5,
+  F_w: 0.98,
+  T_w_fuse: 0.5,
+  fuse_rolling_disable: 0.95,
+  fuse_monthly_disable: 0.99,
   sync_balance_interval_minutes: 10,
   sync_priority_interval_minutes: 30,
 })
@@ -144,15 +145,15 @@ onMounted(() => {
       <el-alert type="info" :closable="false" show-icon class="algo-desc">
         <template #title>
           <div class="desc-content">
-            <p><strong>核心公式：</strong>Score = 月度剩余率 × 时间加速 − 末段惩罚门 × (周度惩罚 + 滚动惩罚)</p>
-            <p><strong>时间加速：</strong>距月度重置超过末段天数时无影响(accel=1)；进入末段后非线性急升，峰值 = 1 + accel_boost</p>
-            <p><strong>周度保活（惩罚机制）：</strong>周度用量越高 + 距重置越远 → 惩罚越大（上界 cap_weekly）</p>
-            <p><strong>滚动熔断（惩罚机制）：</strong>用量超过 threshold 才触发，线性惩罚（上界 cap_rolling）</p>
-            <p><strong>末段惩罚门：</strong>进入末段后惩罚线性衰减到 0，月度信号获得绝对主导</p>
+            <p><strong>烧速率（S）：</strong>S = 月度剩余比例 × 30 / 剩余天数 —— 剩余越少、时间越紧，S 越高</p>
+            <p><strong>周因子（W）：</strong>W = 1 − U_w² × (T_w / 7)，乘法衰减（上界 c_w）—— 周度用量越高、距重置越远，衰减越强</p>
+            <p><strong>综合得分：</strong>burn_rate = S × W，经对数映射（基准 S_0、拉伸 gamma）换算为 weight（W_floor–100）</p>
+            <p><strong>软加权：</strong>全部渠道 priority=1，仅靠 weight 差异化分配流量</p>
             <p><strong>硬熔断：</strong></p>
             <ul>
-              <li>滚动用量超过 fuse_rolling_disable → 渠道禁用</li>
-              <li>月度用量超过 fuse_monthly_disable → 渠道禁用</li>
+              <li>滚动用量 ≥ 95%（fuse_rolling_disable）→ 渠道禁用</li>
+              <li>周度用量 ≥ 98%（F_w）且周剩余 ≥ 0.5 天（T_w_fuse）→ 渠道禁用</li>
+              <li>月度用量 ≥ 99%（fuse_monthly_disable）→ 渠道禁用</li>
             </ul>
           </div>
         </template>
@@ -239,57 +240,69 @@ onMounted(() => {
           </el-row>
         </div>
 
-        <!-- 末段加速参数 -->
+        <!-- 烧速率映射 -->
         <div class="param-group">
-          <h4 class="group-title">末段加速参数</h4>
+          <h4 class="group-title">烧速率映射</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="末段窗口(天)">
-                <el-input-number v-model="form.endgame_days" :min="1" :max="10" :precision="0" :step="1" style="width:100%" />
+              <el-form-item label="月余下限(天) t_min">
+                <el-input-number v-model="form.t_min" :min="0" :max="30" :precision="1" :step="0.1" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="加速峰值附加量">
-                <el-input-number v-model="form.accel_boost" :min="1" :max="20" :precision="0" :step="1" style="width:100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="加速曲率">
-                <el-input-number v-model="form.accel_power" :min="1" :max="5" :precision="0" :step="1" style="width:100%" />
+              <el-form-item label="对数映射基准 S_0">
+                <el-input-number v-model="form.S_0" :min="0.01" :max="10" :precision="2" :step="0.05" style="width:100%" />
               </el-form-item>
             </el-col>
           </el-row>
         </div>
 
-        <!-- 惩罚上界 -->
+        <!-- 周因子衰减 -->
         <div class="param-group">
-          <h4 class="group-title">惩罚上界</h4>
+          <h4 class="group-title">周因子衰减</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="周度惩罚上限">
-                <el-input-number v-model="form.cap_weekly" :min="0" :max="1" :precision="2" :step="0.01" style="width:100%" />
+              <el-form-item label="周因子衰减封顶 c_w">
+                <el-input-number v-model="form.c_w" :min="0" :max="1" :precision="2" :step="0.05" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="滚动惩罚上限">
-                <el-input-number v-model="form.cap_rolling" :min="0" :max="1" :precision="2" :step="0.01" style="width:100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="滚动惩罚触发线">
-                <el-input-number v-model="form.rolling_penalty_threshold" :min="0" :max="1" :precision="2" :step="0.01" style="width:100%" />
+              <el-form-item label="周因子幂次 k">
+                <el-input-number v-model="form.k" :min="1" :max="10" :precision="0" :step="1" style="width:100%" />
               </el-form-item>
             </el-col>
           </el-row>
         </div>
 
-        <!-- 分档与熔断 -->
+        <!-- weight 拉伸 -->
         <div class="param-group">
-          <h4 class="group-title">分档与熔断</h4>
+          <h4 class="group-title">weight 拉伸</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12" :md="8">
-              <el-form-item label="分档间距">
-                <el-input-number v-model="form.tier_threshold" :min="0" :max="1" :precision="2" :step="0.05" style="width:100%" />
+              <el-form-item label="weight 拉伸 gamma">
+                <el-input-number v-model="form.gamma" :min="0.1" :max="10" :precision="2" :step="0.1" style="width:100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="weight 地板 W_floor">
+                <el-input-number v-model="form.W_floor" :min="1" :max="100" :precision="0" :step="1" style="width:100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
+        <!-- 熔断 -->
+        <div class="param-group">
+          <h4 class="group-title">熔断</h4>
+          <el-row :gutter="24">
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="周熔断阈值 F_w">
+                <el-input-number v-model="form.F_w" :min="0" :max="1" :precision="2" :step="0.01" style="width:100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="周熔断周余下限(天) T_w_fuse">
+                <el-input-number v-model="form.T_w_fuse" :min="0" :max="7" :precision="1" :step="0.1" style="width:100%" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="8">
@@ -338,8 +351,11 @@ onMounted(() => {
         <el-table-column label="账号名" min-width="120">
           <template #default="{ row }">{{ row.name || row.account_name || '-' }}</template>
         </el-table-column>
-        <el-table-column label="健康得分" width="100" align="right">
-          <template #default="{ row }">{{ (row.health_score ?? row.score)?.toFixed(2) ?? '-' }}</template>
+        <el-table-column label="烧速率" width="100" align="right">
+          <template #default="{ row }">{{ (row.burn_rate ?? row.score)?.toFixed(2) ?? '-' }}</template>
+        </el-table-column>
+        <el-table-column label="周因子" width="90" align="right">
+          <template #default="{ row }">{{ row.weekly_factor != null ? row.weekly_factor.toFixed(2) : '-' }}</template>
         </el-table-column>
         <el-table-column label="优先级" width="90" align="right">
           <template #default="{ row }">{{ row.calculated_priority ?? row.priority ?? '-' }}</template>
@@ -374,11 +390,12 @@ onMounted(() => {
             {{ formatBalance(row) }}
           </template>
         </el-table-column>
-        <el-table-column label="熔断标记" width="100" align="center">
+        <el-table-column label="状态" width="110" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.fused" size="small" type="danger" effect="dark">熔断</el-tag>
-            <span v-else-if="row.fuse_reason" class="fuse-warn-text">{{ row.fuse_reason }}</span>
-            <span v-else>-</span>
+            <el-tag v-if="row.fused && row.fallback" size="small" type="warning" effect="dark">熔断·保底</el-tag>
+            <el-tag v-else-if="row.fused" size="small" type="danger" effect="dark">熔断</el-tag>
+            <el-tag v-else-if="row.stale" size="small" type="info" effect="dark">过期</el-tag>
+            <span v-else class="status-normal">正常</span>
           </template>
         </el-table-column>
       </el-table>
@@ -529,6 +546,11 @@ onMounted(() => {
 /* 修改行高亮 */
 .algo-table :deep(.dirty > td) {
   background: rgba(255, 193, 7, 0.08) !important;
+}
+
+.status-normal {
+  color: #67c23a;
+  font-size: 12px;
 }
 
 .simulate-note {

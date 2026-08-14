@@ -13,6 +13,8 @@ const state = reactive({
 
 const now = ref(Date.now())
 let timer = null
+let pollTimer = null
+let refreshTimer = null
 
 function progressColor(pct) {
   if (pct < 50) return '#67c23a'
@@ -33,16 +35,39 @@ function formatTime(iso) {
   return new Date(iso).toLocaleString('zh-CN')
 }
 
+async function applyUsageData() {
+  const { data } = await getUsage()
+  state.accounts = data.accounts || []
+  state.lastPollAt = data.lastPollAt || null
+}
+
 async function loadUsage() {
   loading.value = true
   try {
-    const { data } = await getUsage()
-    state.accounts = data.accounts || []
-    state.lastPollAt = data.lastPollAt || null
+    await applyUsageData()
   } catch (err) {
     ElMessage.error('获取用量失败')
   } finally {
     loading.value = false
+  }
+}
+
+// 轻量轮询：不切骨架屏，失败静默
+async function pollUsage() {
+  try {
+    await applyUsageData()
+  } catch (err) {
+    /* 静默 */
+  }
+}
+
+// 自动重抓（每 5 分钟）：静默，不弹提示
+async function autoRefresh() {
+  try {
+    await fetchUsage()
+    await applyUsageData()
+  } catch (err) {
+    /* 静默 */
   }
 }
 
@@ -89,15 +114,47 @@ async function handleApplyReward(account, reward) {
   }
 }
 
+function isVisible() {
+  return document.visibilityState === 'visible'
+}
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(() => {
+    if (isVisible()) pollUsage()
+  }, 30000)
+  refreshTimer = setInterval(() => {
+    if (isVisible()) autoRefresh()
+  }, 5 * 60 * 1000)
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
+}
+
+function handleVisibilityChange() {
+  if (isVisible()) {
+    pollUsage()
+    startPolling()
+  } else {
+    stopPolling()
+  }
+}
+
 onMounted(() => {
   loadUsage()
   timer = setInterval(() => {
     now.value = Date.now()
   }, 1000)
+  startPolling()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  stopPolling()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 
