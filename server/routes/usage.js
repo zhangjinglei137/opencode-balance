@@ -47,6 +47,13 @@ router.get('/', (req, res) => {
     const unusedRewards = a.reward_unused ?? 0;
     let topModels = [];
     try { topModels = JSON.parse(a.daily_models_json || '[]'); } catch (_) {}
+    let rewards = [];
+    try {
+      rewards = (JSON.parse(a.rewards_json || '[]') || [])
+        .filter(r => r.status === 'available')
+        .slice(0, 3)
+        .map(r => ({ id: r.id, email: r.email, amount: r.amount }));
+    } catch (_) {}
     // ponytail: SQLite datetime('now') 是 UTC，转为东八区
     const fetchedAt = a.fetched_at ? utcToBeijing(a.fetched_at) : null;
     return {
@@ -58,6 +65,7 @@ router.get('/', (req, res) => {
       balance_total: 60 + totalRewards * rewardAmount,
       balance_remaining: 60 * (1 - monthlyPct / 100) + unusedRewards * rewardAmount,
       topModels,
+      rewards,
     };
   });
   res.json({ accounts, lastPollAt });
@@ -71,6 +79,51 @@ function utcToBeijing(utcStr) {
 
 router.post('/fetch', async (req, res) => {
   await pollAll();
+  res.json({ ok: true });
+});
+
+// 应用一条邀请奖励（seroval 序列化参数 [workspaceId, referralId] 调用 go.referral.reward.apply）
+router.post('/rewards/apply', async (req, res) => {
+  const { accountId, referralId } = req.body || {};
+  if (!accountId || !referralId) {
+    return res.status(400).json({ error: '缺少必填字段：accountId, referralId' });
+  }
+  const account = getAccount(accountId);
+  if (!account) return res.status(404).json({ error: '账号不存在' });
+
+  const cookieStr = account.auth_cookie.includes('auth=') ? account.auth_cookie : `auth=${account.auth_cookie}`;
+  const body = JSON.stringify({
+    t: { t: 9, i: 0, l: 2, a: [{ t: 1, s: account.workspace_id }, { t: 1, s: referralId }], o: 0 },
+    f: 31,
+    m: [],
+  });
+
+  let resp;
+  try {
+    resp = await fetch('https://opencode.ai/_server', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': cookieStr,
+        'Accept': '*/*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Origin': 'https://opencode.ai',
+        'Referer': `https://opencode.ai/workspace/${account.workspace_id}/go`,
+        'x-server-id': 'go.referral.reward.apply',
+        'x-server-instance': 'server-fn:0',
+      },
+      body,
+    });
+  } catch (err) {
+    return res.status(502).json({ error: `应用奖励失败：${err.message}` });
+  }
+
+  if (!resp.ok) {
+    const errMsg = resp.headers.get('x-error') || (await resp.text().catch(() => '')) || `HTTP ${resp.status}`;
+    return res.status(502).json({ error: `应用奖励失败：${errMsg}` });
+  }
+
+  await pollAccount(account);
   res.json({ ok: true });
 });
 

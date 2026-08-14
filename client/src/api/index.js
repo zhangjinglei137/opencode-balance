@@ -63,6 +63,10 @@ export function fetchUsage() {
   return api.post('/api/usage/fetch')
 }
 
+export function applyReward(accountId, referralId) {
+  return api.post('/api/usage/rewards/apply', { accountId, referralId })
+}
+
 // 渠道控制
 export function getChannelStatus() { return api.get('/api/channels'); }
 export function syncBalance(channelId) { return api.post('/api/channels/sync-balance', { channel_id: channelId }); }

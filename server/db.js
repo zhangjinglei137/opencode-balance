@@ -86,6 +86,7 @@ async function initDb(filePath) {
       reward_amount_cents INTEGER,
       daily_cost REAL,
       daily_models_json TEXT,
+      rewards_json TEXT,
       fetched_at TEXT DEFAULT (datetime('now')),
       error TEXT
     )
@@ -98,6 +99,10 @@ async function initDb(filePath) {
     if (!existing.includes(col)) {
       try { db.run(`ALTER TABLE usage_snapshots ADD COLUMN ${col} INTEGER`); } catch (_) {}
     }
+  }
+  // rewards_json 是 TEXT 类型，单独处理
+  if (!existing.includes('rewards_json')) {
+    try { db.run('ALTER TABLE usage_snapshots ADD COLUMN rewards_json TEXT'); } catch (_) {}
   }
 
   db.run(`
@@ -220,8 +225,8 @@ function saveUsageSnapshot(accountId, data) {
     db.run(
       `INSERT INTO usage_snapshots 
        (account_id, rolling_pct, rolling_reset_at, weekly_pct, weekly_reset_at, monthly_pct, monthly_reset_at,
-        invitation_rewards_count, reward_total, reward_used, reward_unused, reward_amount_cents, daily_cost, daily_models_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        invitation_rewards_count, reward_total, reward_used, reward_unused, reward_amount_cents, daily_cost, daily_models_json, rewards_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         accountId,
         data.rolling?.pct ?? null,
@@ -237,6 +242,7 @@ function saveUsageSnapshot(accountId, data) {
         data.rewards?.rewardAmount ?? null,
         data.dailyCost ?? null,
         data.topModels ? JSON.stringify(data.topModels) : null,
+        data.rewards?.rewards ? JSON.stringify(data.rewards.rewards) : null,
       ]
     );
   }
@@ -251,7 +257,7 @@ function getLatestUsage() {
            s.monthly_pct, s.monthly_reset_at,
            s.invitation_rewards_count,
            s.reward_total, s.reward_used, s.reward_unused, s.reward_amount_cents,
-           s.daily_cost, s.daily_models_json,
+           s.daily_cost, s.daily_models_json, s.rewards_json,
            s.fetched_at, s.error
     FROM accounts a
     LEFT JOIN (
@@ -261,7 +267,7 @@ function getLatestUsage() {
              monthly_pct, monthly_reset_at,
              invitation_rewards_count,
               reward_total, reward_used, reward_unused, reward_amount_cents,
-              daily_cost, daily_models_json,
+              daily_cost, daily_models_json, rewards_json,
               fetched_at, error,
              ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY id DESC) as rn
       FROM usage_snapshots

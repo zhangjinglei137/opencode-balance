@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getUsage, fetchUsage } from '../api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getUsage, fetchUsage, applyReward } from '../api'
 import { countdown } from '../utils/countdown'
 
 const loading = ref(false)
@@ -61,6 +61,32 @@ async function handleRefresh() {
 
 async function retryAccount() {
   await handleRefresh()
+}
+
+// 未用奖励
+const applyingKey = ref(null)
+
+async function handleApplyReward(account, reward) {
+  try {
+    await ElMessageBox.confirm(
+      `确认使用 ${reward.email} 的奖励？\n将抵扣订阅用量 $${(reward.amount / 100).toFixed(2)}`,
+      '使用奖励',
+      { confirmButtonText: '确认使用', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+
+  applyingKey.value = `${account.id}:${reward.id}`
+  try {
+    await applyReward(account.id, reward.id)
+    ElMessage.success('奖励已使用')
+    await loadUsage()
+  } catch (err) {
+    ElMessage.error(err.response?.data?.error || '使用奖励失败')
+  } finally {
+    applyingKey.value = null
+  }
 }
 
 onMounted(() => {
@@ -211,6 +237,32 @@ onUnmounted(() => {
               <el-divider />
               <div class="daily-placeholder">暂无奖励数据</div>
             </div>
+
+            <!-- 未用奖励列表 -->
+            <div class="rewards-section">
+              <div class="rewards-title">未用奖励</div>
+              <div class="rewards-list">
+                <template v-if="account.rewards && account.rewards.length > 0">
+                  <div v-for="reward in account.rewards.slice(0, 3)" :key="reward.id" class="reward-row">
+                    <span class="reward-email">{{ reward.email }}</span>
+                    <el-button
+                      size="small"
+                      :loading="applyingKey === `${account.id}:${reward.id}`"
+                      @click="handleApplyReward(account, reward)"
+                    >
+                      使用
+                    </el-button>
+                  </div>
+                  <div v-for="i in (3 - Math.min(account.rewards.length, 3))" :key="'empty-' + i" class="reward-row reward-row-empty"></div>
+                </template>
+                <template v-else>
+                  <div class="reward-row">
+                    <span class="reward-placeholder">暂无未用奖励</span>
+                  </div>
+                  <div v-for="i in 2" :key="'empty-' + i" class="reward-row reward-row-empty"></div>
+                </template>
+              </div>
+            </div>
           </template>
 
           <template #footer>
@@ -253,13 +305,15 @@ onUnmounted(() => {
 .card-col {
   margin-bottom: 16px;
   min-width: 320px;
+  display: flex;
+  flex-direction: column;
 }
 
 .usage-card {
   background: rgba(22, 33, 62, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
-  height: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
 }
@@ -361,6 +415,8 @@ onUnmounted(() => {
 
 .top-models {
   margin-top: 2px;
+  max-height: 72px;
+  overflow: hidden;
 }
 
 .model-row {
@@ -403,6 +459,47 @@ onUnmounted(() => {
   opacity: 0.5;
 }
 
+/* 未用奖励 */
+.rewards-section {
+  margin-top: 8px;
+}
+
+.rewards-title {
+  font-size: 13px;
+  color: #a0aec0;
+  margin-bottom: 6px;
+}
+
+.rewards-list {
+  height: 96px;
+}
+
+.reward-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+}
+
+.reward-row-empty {
+  visibility: hidden;
+}
+
+.reward-email {
+  flex: 1;
+  color: #94a3b8;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.reward-placeholder {
+  color: #475569;
+  font-size: 12px;
+}
+
 /* 手机端适配 */
 @media (max-width: 640px) {
   .action-inner {
@@ -421,6 +518,15 @@ onUnmounted(() => {
   }
   .model-row {
     font-size: 11px;
+  }
+  .reward-email {
+    font-size: 11px;
+  }
+  .reward-row {
+    height: 28px;
+  }
+  .rewards-list {
+    height: 84px;
   }
 }
 </style>
