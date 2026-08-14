@@ -122,16 +122,20 @@ async function initDb(filePath) {
       rolling_period_hours REAL DEFAULT 5,
       weekly_period_days REAL DEFAULT 7,
       monthly_period_days REAL DEFAULT 30,
+      endgame_days REAL DEFAULT 5,
       fuse_rolling_disable REAL DEFAULT 0.95,
       fuse_monthly_disable REAL DEFAULT 0.99,
       t_min REAL DEFAULT 0.5,
       c_w REAL DEFAULT 1.0,
       k REAL DEFAULT 2,
       S_0 REAL DEFAULT 0.3,
-      gamma REAL DEFAULT 1.0,
+      gamma REAL DEFAULT 1.5,
       W_floor INTEGER DEFAULT 5,
       F_w REAL DEFAULT 0.98,
       T_w_fuse REAL DEFAULT 0.5,
+      urgency_alpha REAL DEFAULT 3,
+      urgency_power REAL DEFAULT 1,
+      q_gate REAL DEFAULT 0.05,
       sync_balance_interval_minutes INTEGER DEFAULT 10,
       sync_priority_interval_minutes INTEGER DEFAULT 30
     )
@@ -140,14 +144,18 @@ async function initDb(filePath) {
   // ponytail: 兼容旧表，尝试添加缺失列
   const algoCols = queryAll("PRAGMA table_info(algorithm_config)").map(r => r.name);
   const newAlgoCols = [
+    { name: 'endgame_days', type: 'REAL DEFAULT 5' },
     { name: 't_min', type: 'REAL DEFAULT 0.5' },
     { name: 'c_w', type: 'REAL DEFAULT 1.0' },
     { name: 'k', type: 'REAL DEFAULT 2' },
     { name: 'S_0', type: 'REAL DEFAULT 0.3' },
-    { name: 'gamma', type: 'REAL DEFAULT 1.0' },
+    { name: 'gamma', type: 'REAL DEFAULT 1.5' },
     { name: 'W_floor', type: 'INTEGER DEFAULT 5' },
     { name: 'F_w', type: 'REAL DEFAULT 0.98' },
     { name: 'T_w_fuse', type: 'REAL DEFAULT 0.5' },
+    { name: 'urgency_alpha', type: 'REAL DEFAULT 3' },
+    { name: 'urgency_power', type: 'REAL DEFAULT 1' },
+    { name: 'q_gate', type: 'REAL DEFAULT 0.05' },
   ];
   for (const col of newAlgoCols) {
     if (!algoCols.includes(col.name)) {
@@ -325,6 +333,7 @@ function updateAlgorithmConfig(params) {
     'fuse_rolling_disable', 'fuse_monthly_disable',
     'sync_balance_interval_minutes', 'sync_priority_interval_minutes',
     't_min', 'c_w', 'k', 'S_0', 'gamma', 'W_floor', 'F_w', 'T_w_fuse',
+    'endgame_days', 'urgency_alpha', 'urgency_power', 'q_gate',
   ];
   const fields = [];
   const vals = [];

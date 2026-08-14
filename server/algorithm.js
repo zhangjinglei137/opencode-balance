@@ -1,9 +1,10 @@
-// ponytail: v2 优先级/权重算法——烧速率模型（Q_m × 月周期 / 剩余天数，周因子惩罚，对数权重映射）
+// ponytail: v3 优先级/权重算法——门控紧迫度模型（S = Q_m + α×urgency×gate，周因子惩罚，对数权重映射）
 const DEFAULTS = {
   rolling_period_hours: 5, weekly_period_days: 7, monthly_period_days: 30,
-  t_min: 0.5, c_w: 1.0, k: 2, S_0: 0.3, gamma: 1.0, W_floor: 5,
+  t_min: 0.5, c_w: 1.0, k: 2, S_0: 0.3, gamma: 1.5, W_floor: 5,
   F_w: 0.98, T_w_fuse: 0.5,
   fuse_rolling_disable: 0.95, fuse_monthly_disable: 0.99,
+  urgency_alpha: 3, endgame_days: 5, urgency_power: 1, q_gate: 0.05,
 };
 
 const miss = (v) => v === null || v === undefined;
@@ -62,8 +63,11 @@ function calculatePriorities(accounts, config) {
     if (!fused && u_w !== null && u_w >= cfg.F_w && T_w >= cfg.T_w_fuse) { fused = true; fuse_reason = 'weekly_disable'; }
     if (!fused && u_m !== null && u_m >= cfg.fuse_monthly_disable) { fused = true; fuse_reason = 'monthly_disable'; }
 
-    // 烧速率：T_m 用 max(T_m, t_min) 参与计算
-    const S = q_m === null ? 0 : q_m * cfg.monthly_period_days / Math.max(T_m, cfg.t_min);
+    // v3 门控紧迫度：S = Q_m + α × urgency × gate（T_m 只进 urgency 不除，t_min 兜底防除零）
+    const T_m_eff = Math.max(T_m, cfg.t_min);
+    const urgency = q_m === null ? 0 : Math.pow(Math.max(0, 1 - T_m_eff / cfg.endgame_days), cfg.urgency_power);
+    const gate = q_m === null ? 0 : Math.min(1, q_m / cfg.q_gate);
+    const S = q_m === null ? 0 : q_m + cfg.urgency_alpha * urgency * gate;
     const W = u_w === null ? 1 : Math.min(Math.max(1 - cfg.c_w * Math.pow(u_w, cfg.k) * (T_w / cfg.weekly_period_days), 0), 1);
     const S_eff = S * W;
 

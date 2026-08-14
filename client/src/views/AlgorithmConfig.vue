@@ -12,11 +12,15 @@ const form = reactive({
   rolling_period_hours: 5,
   weekly_period_days: 7,
   monthly_period_days: 30,
+  urgency_alpha: 3,
+  endgame_days: 5,
+  urgency_power: 1,
+  q_gate: 0.05,
   t_min: 0.5,
   c_w: 1.0,
   k: 2,
   S_0: 0.3,
-  gamma: 1.0,
+  gamma: 1.5,
   W_floor: 5,
   F_w: 0.98,
   T_w_fuse: 0.5,
@@ -145,9 +149,11 @@ onMounted(() => {
       <el-alert type="info" :closable="false" show-icon class="algo-desc">
         <template #title>
           <div class="desc-content">
-            <p><strong>烧速率（S）：</strong>S = 月度剩余比例 × 30 / 剩余天数 —— 剩余越少、时间越紧，S 越高</p>
+            <p><strong>综合得分（S）：</strong>S = 月度剩余比例 + urgency_alpha × 时间紧迫度 × 金额门控</p>
+            <p><strong>时间紧迫度：</strong>(1 − T_m / endgame_days)^urgency_power —— 进入末段窗口后非线性急升</p>
+            <p><strong>金额门控：</strong>min(1, 月度剩余比例 / q_gate) —— 余额逼近阈值时放行</p>
             <p><strong>周因子（W）：</strong>W = 1 − U_w² × (T_w / 7)，乘法衰减（上界 c_w）—— 周度用量越高、距重置越远，衰减越强</p>
-            <p><strong>综合得分：</strong>burn_rate = S × W，经对数映射（基准 S_0、拉伸 gamma）换算为 weight（W_floor–100）</p>
+            <p><strong>weight 映射：</strong>burn_rate = S × W，经对数映射（基准 S_0、拉伸 gamma）换算为 weight（W_floor–100）</p>
             <p><strong>软加权：</strong>全部渠道 priority=1，仅靠 weight 差异化分配流量</p>
             <p><strong>硬熔断：</strong></p>
             <ul>
@@ -235,6 +241,33 @@ onMounted(() => {
             <el-col :xs="24" :sm="12" :md="8">
               <el-form-item label="月度周期(天)">
                 <el-input-number v-model="form.monthly_period_days" :min="1" :max="365" :precision="0" :step="1" style="width:100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
+        <!-- 紧迫度门控 -->
+        <div class="param-group">
+          <h4 class="group-title">紧迫度门控</h4>
+          <el-row :gutter="24">
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="紧迫度峰值 urgency_alpha">
+                <el-input-number v-model="form.urgency_alpha" :min="0" :max="10" :precision="1" :step="0.5" style="width:100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="末段窗口(天) endgame_days">
+                <el-input-number v-model="form.endgame_days" :min="1" :max="30" :precision="0" :step="1" style="width:100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="紧迫度曲率 urgency_power">
+                <el-input-number v-model="form.urgency_power" :min="0.1" :max="5" :precision="1" :step="0.1" style="width:100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-form-item label="金额门控阈值 q_gate">
+                <el-input-number v-model="form.q_gate" :min="0.01" :max="1" :precision="2" :step="0.01" style="width:100%" />
               </el-form-item>
             </el-col>
           </el-row>
